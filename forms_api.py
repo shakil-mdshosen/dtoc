@@ -41,6 +41,7 @@ def builder():
     return render_template('builder.html')
 
 @forms_bp.route('/form/<int:form_id>', methods=['GET', 'POST'])
+@login_required
 def view_form(form_id):
     form = Form.query.get_or_404(form_id)
     if not form.is_active:
