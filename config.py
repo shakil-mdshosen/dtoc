@@ -11,13 +11,15 @@ class Config:
     # Database configuration
     if "TOOL_DATA_DIR" in os.environ:
         # We are on Toolforge
-        TOOL_NAME = os.environ.get("TOOL_NAME", "dtoc")
-        # For python toolforge library, it's easier to use a connection string or the toolforge module
-        # For now, we will construct the connection string based on the standard MariaDB format
-        db_user = os.environ.get("TOOLFORGE_DB_USER")
-        db_password = os.environ.get("TOOLFORGE_DB_PASSWORD")
+        import configparser
+        import os
+        config_parser = configparser.ConfigParser()
+        config_parser.read(os.path.expanduser("~/replica.my.cnf"))
+        db_user = config_parser.get("client", "user").strip("'\"")
+        db_password = config_parser.get("client", "password").strip("'\"")
         db_host = "tools.db.svc.wikimedia.cloud"
-        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/s55638__dtoc"
+        db_name = f"{db_user}__dtoc" # Toolforge user prefixed db name
+        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{db_user}:{db_password}@{db_host}/{db_name}"
     else:
         # Local Development
         basedir = os.path.abspath(os.path.dirname(__file__))
