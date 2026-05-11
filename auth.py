@@ -48,7 +48,7 @@ def oauth_callback():
             'code': code,
             'redirect_uri': redirect_uri
         }, auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET),
-           headers={'User-Agent': USER_AGENT})
+           headers={'User-Agent': USER_AGENT}, timeout=10)
         
         if not token_response.ok:
             flash(f"OAuth token exchange failed: {token_response.text[:200]}...", "danger")
@@ -58,8 +58,11 @@ def oauth_callback():
         
         # Fetch user identity using the token directly (without saving it to session)
         oauth_client = OAuth2Session(Config.WIKI_CLIENT_ID, token=token)
-        profile = oauth_client.get(PROFILE_URL, headers={'User-Agent': USER_AGENT}).json()
+        profile = oauth_client.get(PROFILE_URL, headers={'User-Agent': USER_AGENT}, timeout=10).json()
         session['username'] = profile.get('username')
+    except requests.exceptions.Timeout:
+        flash("OAuth login failed: Connection to Wikimedia timed out. This may be a Toolforge networking issue.", "danger")
+        return redirect(url_for('home'))
     except Exception as e:
         flash(f"OAuth login failed: {str(e)[:200]}", "danger")
         return redirect(url_for('home'))
