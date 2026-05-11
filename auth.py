@@ -10,13 +10,23 @@ TOKEN_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/access_token'
 PROFILE_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile'
 USER_AGENT = 'dtoc-toolforge/1.0 (https://dtoc.toolforge.org)'
 
-@auth_bp.route('/login')
-def login():
-    session['return_to'] = request.args.get('next', url_for('home'))
-    
-    redirect_uri = url_for('auth.oauth_callback', _external=True)
+def _oauth_config_missing():
+    return not Config.WIKI_CLIENT_ID or not Config.WIKI_CLIENT_SECRET
+
+def _oauth_redirect_uri():
+    redirect_uri = Config.WIKI_REDIRECT_URI or url_for('auth.oauth_callback', _external=True)
     if redirect_uri.startswith('http://'):
         redirect_uri = redirect_uri.replace('http://', 'https://')
+    return redirect_uri
+
+@auth_bp.route('/login')
+def login():
+    if _oauth_config_missing():
+        flash("OAuth is not configured. Please set WIKI_CLIENT_ID and WIKI_CLIENT_SECRET.", "danger")
+        return redirect(url_for('home'))
+
+    session['return_to'] = request.args.get('next', url_for('home'))
+    redirect_uri = _oauth_redirect_uri()
         
     oauth = OAuth2Session(Config.WIKI_CLIENT_ID, redirect_uri=redirect_uri)
     authorization_url, state = oauth.authorization_url(AUTHORIZATION_BASE_URL)
@@ -26,13 +36,15 @@ def login():
 
 @auth_bp.route('/oauth-callback')
 def oauth_callback():
+    if _oauth_config_missing():
+        flash("OAuth is not configured. Please set WIKI_CLIENT_ID and WIKI_CLIENT_SECRET.", "danger")
+        return redirect(url_for('home'))
+
     if 'oauth_state' not in session:
         flash("OAuth flow failed. Missing state.", "danger")
         return redirect(url_for('home'))
         
-    redirect_uri = url_for('auth.oauth_callback', _external=True)
-    if redirect_uri.startswith('http://'):
-        redirect_uri = redirect_uri.replace('http://', 'https://')
+    redirect_uri = _oauth_redirect_uri()
         
     oauth = OAuth2Session(Config.WIKI_CLIENT_ID, state=session['oauth_state'], redirect_uri=redirect_uri)
     
@@ -46,8 +58,10 @@ def oauth_callback():
         token_response = requests.post(TOKEN_URL, data={
             'grant_type': 'authorization_code',
             'code': code,
-            'redirect_uri': redirect_uri
-        }, auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET),
+            'redirect_uri': redirect_uri,
+            'client_id': Config.WIKI_CLIENT_ID,
+            'client_secret': Config.WIKI_CLIENT_SECRET
+        },
            headers={'User-Agent': USER_AGENT})
         
         if not token_response.ok:
