@@ -13,7 +13,7 @@
         {% for form in forms %}
         <li>
             <div class="px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div class="text-sm font-medium text-blue-700 break-words">
+                <div class="font-medium text-blue-700 break-words">
                     <span class="text-base">{{ form.title }}</span>
                     {% if not form.is_active %}
                         <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">

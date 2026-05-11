@@ -25,7 +25,7 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-2 sm:gap-4">
                     {% if session.get('username') %}
-                        <span class="text-white/95 text-sm sm:text-base break-all">Welcome, {{ session.get('username') }}</span>
+                        <span class="text-white/95 text-sm sm:text-base break-words">Welcome, {{ session.get('username') }}</span>
                         <a href="{{ url_for('auth.logout') }}" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-md text-sm font-medium">Logout</a>
                     {% else %}
                         <a href="{{ url_for('auth.login') }}" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-md text-sm font-medium">Login with Wikimedia</a>
