@@ -52,10 +52,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="w-full max-w-3xl mx-auto py-4 sm:py-8 px-4 sm:px-0">
+<div class="w-full max-w-3xl mx-auto py-4 sm:py-8 px-2 sm:px-0">
     <form method="POST" action="{{ url_for('forms.builder') }}" id="builderForm">
         <!-- Title Card -->
-        <div class="gf-card gf-top-card p-6 sm:p-8" onclick="setActive(this)">
+        <div class="gf-card gf-top-card p-5 sm:p-8" onclick="setActive(this)">
             <input type="text" name="title" id="formTitle" placeholder="Untitled form" required class="gf-input-title w-full mb-4">
             <input type="text" id="formDesc" placeholder="Form description" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300">
         </div>
@@ -66,13 +66,13 @@
             <!-- Fields injected here -->
         </div>
 
-        <div class="flex justify-between items-center mt-8">
-            <button type="button" onclick="addField()" class="flex items-center space-x-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-full hover:bg-gray-50 shadow-sm">
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between sm:items-center mt-8">
+            <button type="button" onclick="addField()" class="w-full sm:w-auto justify-center flex items-center space-x-2 bg-white border border-gray-300 text-gray-700 px-4 py-2.5 rounded-full hover:bg-gray-50 shadow-sm">
                 <span class="material-icons">add</span>
                 <span class="font-medium">Add question</span>
             </button>
             
-            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md shadow">
+            <button type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-6 rounded-md shadow">
                 Save Form
             </button>
         </div>
@@ -145,7 +145,7 @@
 
         fields.forEach(f => {
             const card = document.createElement('div');
-            card.className = 'gf-card p-6 sm:p-8';
+            card.className = 'gf-card p-5 sm:p-8';
             card.onclick = () => setActive(card);
 
             let optionsHtml = '';

@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mb-6 flex justify-between items-center">
+<div class="mb-6 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
     <h2 class="text-2xl font-bold text-gray-900">Your Dashboard</h2>
-    <a href="{{ url_for('forms.builder') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+    <a href="{{ url_for('forms.builder') }}" class="inline-flex justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-md shadow-sm">
         Create New Form
     </a>
 </div>
 
-<div class="bg-white shadow overflow-hidden sm:rounded-md">
+<div class="bg-white shadow-md border border-gray-200 overflow-hidden rounded-xl">
     <ul class="divide-y divide-gray-200">
         {% for form in forms %}
         <li>
-            <div class="px-4 py-4 sm:px-6 flex items-center justify-between">
-                <div class="text-sm font-medium text-blue-600 truncate">
-                    {{ form.title }}
+            <div class="px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="font-medium text-blue-700 break-words">
+                    <span class="text-base">{{ form.title }}</span>
                     {% if not form.is_active %}
                         <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
                             Closed
@@ -25,25 +25,25 @@
                         </span>
                     {% endif %}
                 </div>
-                <div class="ml-2 flex-shrink-0 flex flex-wrap gap-2 justify-end">
-                    <a href="{{ url_for('forms.view_form', form_id=form.id) }}" class="text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-1 rounded">View Form</a>
-                    <a href="{{ url_for('forms.view_submissions', form_id=form.id) }}" class="text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-1 rounded">Submissions</a>
-                    <a href="{{ url_for('export.export_csv', form_id=form.id) }}" class="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded">Export CSV</a>
-                    <a href="{{ url_for('export.export_json', form_id=form.id) }}" class="text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-3 py-1 rounded">Export JSON</a>
+                <div class="w-full sm:w-auto flex-shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:justify-end">
+                    <a href="{{ url_for('forms.view_form', form_id=form.id) }}" class="text-center text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-2 rounded">View Form</a>
+                    <a href="{{ url_for('forms.view_submissions', form_id=form.id) }}" class="text-center text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-2 rounded">Submissions</a>
+                    <a href="{{ url_for('export.export_csv', form_id=form.id) }}" class="text-center text-green-600 hover:text-green-900 bg-green-50 px-3 py-2 rounded">Export CSV</a>
+                    <a href="{{ url_for('export.export_json', form_id=form.id) }}" class="text-center text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-3 py-2 rounded">Export JSON</a>
                     {% if roles[form.id] == 'admin' %}
                         {% if form.is_active %}
                             <form action="{{ url_for('forms.close_form', form_id=form.id) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to close this form? Submissions will be deleted 90 days after closing.');">
-                                <button type="submit" class="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded">Close Form</button>
+                                <button type="submit" class="w-full text-red-600 hover:text-red-900 bg-red-50 px-3 py-2 rounded">Close Form</button>
                             </form>
                         {% else %}
                             <form action="{{ url_for('forms.reopen_form', form_id=form.id) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to reopen this form?');">
-                                <button type="submit" class="text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-3 py-1 rounded">Reopen Form</button>
+                                <button type="submit" class="w-full text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-3 py-2 rounded">Reopen Form</button>
                             </form>
                         {% endif %}
                     {% endif %}
                 </div>
             </div>
-            <div class="px-4 py-2 sm:px-6 text-sm text-gray-500">
+            <div class="px-4 py-2 sm:px-6 text-sm text-gray-500 bg-gray-50/70">
                 Created: {{ form.created_at.strftime('%Y-%m-%d %H:%M') }} | 
                 {% if form.closed_at %}
                     Closed: {{ form.closed_at.strftime('%Y-%m-%d %H:%M') }}
