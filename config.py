@@ -6,7 +6,7 @@ class Config:
     # OAuth configuration
     WIKI_CLIENT_ID = os.environ.get("WIKI_CLIENT_ID", "ae071ef7591ed1771dbe77e5cdae49d5")
     WIKI_CLIENT_SECRET = os.environ.get("WIKI_CLIENT_SECRET", "08dcd9b3e19195e2611261ebf5d4e09e68112f65")
-    OAUTH_MWURI = 'https://meta.wikimedia.org/w/index.py'
+    OAUTH_MWURI = 'https://meta.wikimedia.org/w/index.php'
     
     # Database configuration
     if "TOOL_DATA_DIR" in os.environ:
