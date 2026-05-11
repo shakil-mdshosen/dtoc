@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <h2 class="text-2xl font-bold text-gray-900">Your Dashboard</h2>
+    <a href="{{ url_for('forms.builder') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        Create New Form
+    </a>
+</div>
+
+<div class="bg-white shadow overflow-hidden sm:rounded-md">
+    <ul class="divide-y divide-gray-200">
+        {% for form in forms %}
+        <li>
+            <div class="px-4 py-4 sm:px-6 flex items-center justify-between">
+                <div class="text-sm font-medium text-blue-600 truncate">
+                    {{ form.title }}
+                    {% if not form.is_active %}
+                        <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                            Closed
+                        </span>
+                    {% else %}
+                        <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Active
+                        </span>
+                    {% endif %}
+                </div>
+                <div class="ml-2 flex-shrink-0 flex space-x-2">
+                    <a href="{{ url_for('forms.view_form', form_id=form.id) }}" class="text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-1 rounded">View Form</a>
+                    <a href="{{ url_for('export.export_csv', form_id=form.id) }}" class="text-green-600 hover:text-green-900 bg-green-50 px-3 py-1 rounded">Export CSV</a>
+                    {% if form.is_active %}
+                        <form action="{{ url_for('forms.close_form', form_id=form.id) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to close this form? Submissions will be deleted 90 days after closing.');">
+                            <button type="submit" class="text-red-600 hover:text-red-900 bg-red-50 px-3 py-1 rounded">Close Form</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="px-4 py-2 sm:px-6 text-sm text-gray-500">
+                Created: {{ form.created_at.strftime('%Y-%m-%d %H:%M') }} | 
+                {% if form.closed_at %}
+                    Closed: {{ form.closed_at.strftime('%Y-%m-%d %H:%M') }}
+                {% endif %}
+            </div>
+        </li>
+        {% else %}
+        <li>
+            <div class="px-4 py-4 sm:px-6 text-gray-500 italic">
+                You haven't created any forms yet.
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

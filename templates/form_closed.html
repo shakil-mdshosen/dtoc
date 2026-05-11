@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white shadow sm:rounded-lg p-6 max-w-2xl mx-auto text-center">
+    <div class="mb-4">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+    </div>
+    <h2 class="text-2xl font-bold mb-2 text-gray-900">Form Closed</h2>
+    <p class="text-gray-600 mb-6">
+        The form <strong>"{{ form.title }}"</strong> is currently closed and no longer accepting submissions.
+    </p>
+    {% if session.get('username') %}
+        <a href="{{ url_for('forms.dashboard') }}" class="text-blue-600 hover:text-blue-900 font-medium">Return to Dashboard</a>
+    {% else %}
+        <a href="{{ url_for('home') }}" class="text-blue-600 hover:text-blue-900 font-medium">Return Home</a>
+    {% endif %}
+</div>
+{% endblock %}

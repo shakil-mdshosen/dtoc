@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.form.io/formiojs/formio.full.min.css">
+<script src="https://cdn.form.io/formiojs/formio.full.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow sm:rounded-lg p-6 max-w-3xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6 text-center border-b pb-4">{{ form.title }}</h2>
+    
+    <div id="formio" class="mt-4"></div>
+</div>
+
+<script>
+    window.onload = function() {
+        const schema = {{ form.schema | safe }};
+        
+        Formio.createForm(document.getElementById('formio'), schema).then(function(formioForm) {
+            formioForm.on('submit', function(submission) {
+                // Send data to our backend
+                fetch("{{ url_for('forms.view_form', form_id=form.id) }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(submission)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Submission received successfully!');
+                    window.location.reload();
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    alert('An error occurred submitting the form.');
+                });
+            });
+        });
+    };
+</script>
+{% endblock %}
