@@ -1,6 +1,7 @@
 from flask import Blueprint, session, redirect, request, url_for, flash
 from requests_oauthlib import OAuth2Session
-import os
+import json
+from urllib.parse import urlparse, urlunparse
 from config import Config
 
 auth_bp = Blueprint('auth', __name__)
@@ -15,8 +16,9 @@ def _oauth_config_missing():
 
 def _oauth_redirect_uri():
     redirect_uri = Config.WIKI_REDIRECT_URI or url_for('auth.oauth_callback', _external=True)
-    if redirect_uri.startswith('http://'):
-        redirect_uri = redirect_uri.replace('http://', 'https://')
+    parsed = urlparse(redirect_uri)
+    if parsed.scheme == 'http':
+        redirect_uri = urlunparse(parsed._replace(scheme='https'))
     return redirect_uri
 
 @auth_bp.route('/login')
@@ -67,7 +69,22 @@ def oauth_callback():
             auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET),
             headers={'User-Agent': USER_AGENT}
         )
-        if not token_response.ok and "invalid_client" in token_response.text:
+        token_error = None
+        if not token_response.ok:
+            try:
+                token_error = token_response.json().get("error")
+            except json.JSONDecodeError:
+                token_error = None
+
+        invalid_client_error = token_error == "invalid_client" or (
+            token_error is None and "invalid_client" in token_response.text
+        )
+
+        if (
+            not token_response.ok
+            and token_response.status_code in (400, 401)
+            and invalid_client_error
+        ):
             token_response = requests.post(
                 TOKEN_URL,
                 data={
