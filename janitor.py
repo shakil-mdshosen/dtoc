@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 from app import create_app
 from models import db, Form, Submission, AuditLog
 
-def run_janitor():
-    app = create_app()
+def run_janitor(app=None):
+    if app is None:
+        app = create_app()
     with app.app_context():
         # Find all closed forms older than 90 days
         cutoff_date = datetime.utcnow() - timedelta(days=90)
