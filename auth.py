@@ -35,20 +35,31 @@ def oauth_callback():
         
     oauth = OAuth2Session(Config.WIKI_CLIENT_ID, state=session['oauth_state'], redirect_uri=redirect_uri)
     
+    import requests
     try:
-        authorization_response = request.url
-        if authorization_response.startswith('http://'):
-            authorization_response = authorization_response.replace('http://', 'https://')
+        code = request.args.get('code')
+        if not code:
+            flash("OAuth login failed: No code returned.", "danger")
+            return redirect(url_for('home'))
             
-        token = oauth.fetch_token(
-            TOKEN_URL,
-            authorization_response=authorization_response,
-            client_secret=Config.WIKI_CLIENT_SECRET
-        )
+        token_response = requests.post(TOKEN_URL, data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': Config.WIKI_CLIENT_ID,
+            'client_secret': Config.WIKI_CLIENT_SECRET,
+            'redirect_uri': redirect_uri
+        })
+        
+        if not token_response.ok:
+            flash(f"OAuth token exchange failed: {token_response.text}", "danger")
+            return redirect(url_for('home'))
+            
+        token = token_response.json()
         session['access_token'] = token
         
         # Fetch user identity
-        profile = oauth.get(PROFILE_URL).json()
+        oauth_client = OAuth2Session(Config.WIKI_CLIENT_ID, token=token)
+        profile = oauth_client.get(PROFILE_URL).json()
         session['username'] = profile.get('username')
     except Exception as e:
         flash(f"OAuth login failed: {str(e)}", "danger")
