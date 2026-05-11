@@ -41,10 +41,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="w-full max-w-3xl mx-auto py-4 sm:py-8 px-4 sm:px-0">
+<div class="w-full max-w-3xl mx-auto py-4 sm:py-8 px-2 sm:px-0">
     <form id="submissionForm" onsubmit="submitForm(event)">
         <!-- Header Card -->
-        <div class="gf-card gf-top-card p-6 sm:p-8" id="headerCard">
+        <div class="gf-card gf-top-card p-5 sm:p-8" id="headerCard">
             <h1 class="text-2xl sm:text-3xl font-normal text-gray-900 mb-2">{{ form.title }}</h1>
             <p id="formDesc" class="text-gray-600 text-sm whitespace-pre-wrap"></p>
             <div class="mt-4 pt-4 border-t border-gray-200">
@@ -57,11 +57,11 @@
         
         <div id="fieldsContainer"></div>
 
-        <div class="flex justify-between items-center mt-6 mb-12">
-            <button type="submit" class="bg-[#673ab7] hover:bg-[#5e35b1] text-white font-medium py-2 px-6 rounded shadow transition-colors">
+        <div class="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mt-6 mb-12">
+            <button type="submit" class="w-full sm:w-auto bg-[#673ab7] hover:bg-[#5e35b1] text-white font-medium py-2.5 px-6 rounded shadow transition-colors">
                 Submit
             </button>
-            <button type="button" onclick="document.getElementById('submissionForm').reset()" class="text-[#673ab7] hover:bg-purple-50 font-medium py-2 px-4 rounded transition-colors">
+            <button type="button" onclick="document.getElementById('submissionForm').reset()" class="w-full sm:w-auto text-[#673ab7] hover:bg-purple-50 font-medium py-2.5 px-4 rounded transition-colors border border-purple-100">
                 Clear form
             </button>
         </div>
@@ -83,7 +83,7 @@
 
     fields.forEach(f => {
         const card = document.createElement('div');
-        card.className = 'gf-card p-6 sm:p-8';
+        card.className = 'gf-card p-5 sm:p-8';
         card.onclick = () => {
             document.querySelectorAll('.gf-card').forEach(c => c.classList.remove('active'));
             card.classList.add('active');
