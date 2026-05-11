@@ -43,6 +43,7 @@ def oauth_callback():
             flash("OAuth login failed: No code returned.", "danger")
             return redirect(url_for('home'))
             
+        print(f"DEBUG: Starting POST to {TOKEN_URL}")
         token_response = requests.post(TOKEN_URL, data={
             'grant_type': 'authorization_code',
             'code': code,
@@ -50,20 +51,34 @@ def oauth_callback():
         }, auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET),
            headers={'User-Agent': USER_AGENT}, timeout=10)
         
+        print(f"DEBUG: Token response status: {token_response.status_code}")
+        
         if not token_response.ok:
             flash(f"OAuth token exchange failed: {token_response.text[:200]}...", "danger")
             return redirect(url_for('home'))
             
         token = token_response.json()
+        print("DEBUG: Successfully parsed token JSON. Fetching profile...")
+        
+        # Clear out any potential old junk from session
+        session.pop('access_token', None)
+        session.pop('request_token', None)
         
         # Fetch user identity using the token directly (without saving it to session)
         oauth_client = OAuth2Session(Config.WIKI_CLIENT_ID, token=token)
-        profile = oauth_client.get(PROFILE_URL, headers={'User-Agent': USER_AGENT}, timeout=10).json()
+        profile_response = oauth_client.get(PROFILE_URL, headers={'User-Agent': USER_AGENT}, timeout=10)
+        print(f"DEBUG: Profile response status: {profile_response.status_code}")
+        
+        profile = profile_response.json()
         session['username'] = profile.get('username')
+        print(f"DEBUG: Successfully logged in user {session['username']}")
+        
     except requests.exceptions.Timeout:
+        print("DEBUG: Caught requests.exceptions.Timeout")
         flash("OAuth login failed: Connection to Wikimedia timed out. This may be a Toolforge networking issue.", "danger")
         return redirect(url_for('home'))
     except Exception as e:
+        print(f"DEBUG: Caught Exception: {e}")
         flash(f"OAuth login failed: {str(e)[:200]}", "danger")
         return redirect(url_for('home'))
         
