@@ -8,6 +8,7 @@ auth_bp = Blueprint('auth', __name__)
 AUTHORIZATION_BASE_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/authorize'
 TOKEN_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/access_token'
 PROFILE_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile'
+USER_AGENT = 'dtoc-toolforge/1.0 (https://dtoc.toolforge.org)'
 
 @auth_bp.route('/login')
 def login():
@@ -46,7 +47,8 @@ def oauth_callback():
             'grant_type': 'authorization_code',
             'code': code,
             'redirect_uri': redirect_uri
-        }, auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET))
+        }, auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET),
+           headers={'User-Agent': USER_AGENT})
         
         if not token_response.ok:
             flash(f"OAuth token exchange failed: {token_response.text}", "danger")
@@ -57,7 +59,7 @@ def oauth_callback():
         
         # Fetch user identity
         oauth_client = OAuth2Session(Config.WIKI_CLIENT_ID, token=token)
-        profile = oauth_client.get(PROFILE_URL).json()
+        profile = oauth_client.get(PROFILE_URL, headers={'User-Agent': USER_AGENT}).json()
         session['username'] = profile.get('username')
     except Exception as e:
         flash(f"OAuth login failed: {str(e)}", "danger")
