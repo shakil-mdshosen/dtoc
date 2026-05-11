@@ -24,7 +24,7 @@ def login():
     session['oauth_state'] = state
     return redirect(authorization_url)
 
-@auth_bp.route('/oauth-callback')
+@auth_bp.route('/login/wikimedia/callback')
 def oauth_callback():
     if 'oauth_state' not in session:
         flash("OAuth flow failed. Missing state.", "danger")
