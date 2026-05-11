@@ -55,14 +55,28 @@ def oauth_callback():
             flash("OAuth login failed: No code returned.", "danger")
             return redirect(url_for('home'))
             
-        token_response = requests.post(TOKEN_URL, data={
+        token_payload = {
             'grant_type': 'authorization_code',
             'code': code,
-            'redirect_uri': redirect_uri,
-            'client_id': Config.WIKI_CLIENT_ID,
-            'client_secret': Config.WIKI_CLIENT_SECRET
-        },
-           headers={'User-Agent': USER_AGENT})
+            'redirect_uri': redirect_uri
+        }
+
+        token_response = requests.post(
+            TOKEN_URL,
+            data=token_payload,
+            auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET),
+            headers={'User-Agent': USER_AGENT}
+        )
+        if not token_response.ok and "invalid_client" in token_response.text:
+            token_response = requests.post(
+                TOKEN_URL,
+                data={
+                    **token_payload,
+                    'client_id': Config.WIKI_CLIENT_ID,
+                    'client_secret': Config.WIKI_CLIENT_SECRET
+                },
+                headers={'User-Agent': USER_AGENT}
+            )
         
         if not token_response.ok:
             flash(f"OAuth token exchange failed: {token_response.text}", "danger")

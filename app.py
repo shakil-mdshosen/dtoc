@@ -6,6 +6,9 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    if not app.config.get("WIKI_CLIENT_ID") or not app.config.get("WIKI_CLIENT_SECRET"):
+        app.logger.warning("OAuth credentials missing: set WIKI_CLIENT_ID and WIKI_CLIENT_SECRET.")
+
     db.init_app(app)
 
     from auth import auth_bp
