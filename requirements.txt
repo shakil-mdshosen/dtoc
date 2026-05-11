@@ -7,3 +7,4 @@ requests-oauthlib==2.0.0
 gunicorn==22.0.0
 python-dotenv==1.0.1
 pytest==8.2.0
+openpyxl==3.1.2
