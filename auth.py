@@ -45,10 +45,8 @@ def oauth_callback():
         token_response = requests.post(TOKEN_URL, data={
             'grant_type': 'authorization_code',
             'code': code,
-            'client_id': Config.WIKI_CLIENT_ID,
-            'client_secret': Config.WIKI_CLIENT_SECRET,
             'redirect_uri': redirect_uri
-        })
+        }, auth=(Config.WIKI_CLIENT_ID, Config.WIKI_CLIENT_SECRET))
         
         if not token_response.ok:
             flash(f"OAuth token exchange failed: {token_response.text}", "danger")
