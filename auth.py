@@ -51,18 +51,17 @@ def oauth_callback():
            headers={'User-Agent': USER_AGENT})
         
         if not token_response.ok:
-            flash(f"OAuth token exchange failed: {token_response.text}", "danger")
+            flash(f"OAuth token exchange failed: {token_response.text[:200]}...", "danger")
             return redirect(url_for('home'))
             
         token = token_response.json()
-        session['access_token'] = token
         
-        # Fetch user identity
+        # Fetch user identity using the token directly (without saving it to session)
         oauth_client = OAuth2Session(Config.WIKI_CLIENT_ID, token=token)
         profile = oauth_client.get(PROFILE_URL, headers={'User-Agent': USER_AGENT}).json()
         session['username'] = profile.get('username')
     except Exception as e:
-        flash(f"OAuth login failed: {str(e)}", "danger")
+        flash(f"OAuth login failed: {str(e)[:200]}", "danger")
         return redirect(url_for('home'))
         
     return_to = session.pop('return_to', url_for('home'))
