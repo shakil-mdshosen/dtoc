@@ -1,42 +1,196 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://cdn.form.io/formiojs/formio.full.min.css">
-<script src="https://cdn.form.io/formiojs/formio.full.min.js"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+    .gf-card {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+        margin-bottom: 24px;
+        transition: box-shadow 0.2s;
+    }
+    .gf-card.active {
+        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+    }
+    .gf-top-card {
+        border-top: 10px solid #673ab7;
+    }
+    .gf-input {
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid #e0e0e0;
+        border-radius: 0;
+        padding: 8px 0;
+        background: transparent;
+        font-size: 15px;
+    }
+    .gf-input:focus {
+        outline: none;
+        border-bottom: 2px solid #673ab7;
+        padding-bottom: 7px;
+    }
+    /* Custom radio and checkbox styles */
+    .gf-radio, .gf-checkbox {
+        width: 20px;
+        height: 20px;
+        accent-color: #673ab7;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="bg-white shadow sm:rounded-lg p-6 max-w-3xl mx-auto">
-    <h2 class="text-2xl font-bold mb-6 text-center border-b pb-4">{{ form.title }}</h2>
-    
-    <div id="formio" class="mt-4"></div>
+<div class="max-w-3xl mx-auto py-8">
+    <form id="submissionForm" onsubmit="submitForm(event)">
+        <!-- Header Card -->
+        <div class="gf-card gf-top-card p-6" id="headerCard">
+            <h1 class="text-3xl font-normal text-gray-900 mb-2">{{ form.title }}</h1>
+            <p id="formDesc" class="text-gray-600 text-sm whitespace-pre-wrap"></p>
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <p class="text-sm text-gray-500">
+                    {% if session.username %}
+                        Logged in as {{ session.username }} (<a href="{{ url_for('auth.logout') }}" class="text-blue-600 hover:underline">Switch account</a>)
+                    {% else %}
+                        Not logged in. You are submitting this anonymously. (<a href="{{ url_for('auth.login') }}" class="text-blue-600 hover:underline">Sign in to save progress</a>)
+                    {% endif %}
+                </p>
+                <p class="text-red-600 text-sm mt-2">* Indicates required question</p>
+            </div>
+        </div>
+        
+        <div id="fieldsContainer"></div>
+
+        <div class="flex justify-between items-center mt-6">
+            <button type="submit" class="bg-[#673ab7] hover:bg-[#5e35b1] text-white font-medium py-2 px-6 rounded shadow">
+                Submit
+            </button>
+            <button type="button" onclick="document.getElementById('submissionForm').reset()" class="text-[#673ab7] hover:bg-purple-50 font-medium py-2 px-4 rounded transition-colors">
+                Clear form
+            </button>
+        </div>
+    </form>
 </div>
 
 <script>
-    window.onload = function() {
-        const schema = {{ form.schema | safe }};
-        
-        Formio.createForm(document.getElementById('formio'), schema).then(function(formioForm) {
-            formioForm.on('submit', function(submission) {
-                // Send data to our backend
-                fetch("{{ url_for('forms.view_form', form_id=form.id) }}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(submission)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    alert('Submission received successfully!');
-                    window.location.reload();
-                })
-                .catch((error) => {
-                    console.error('Error:', error);
-                    alert('An error occurred submitting the form.');
-                });
+    const schema = {{ form.schema | safe }};
+    const container = document.getElementById('fieldsContainer');
+
+    // Display description if available
+    if (schema.description) {
+        document.getElementById('formDesc').textContent = schema.description;
+    } else {
+        document.getElementById('formDesc').style.display = 'none';
+    }
+
+    const fields = schema.fields || [];
+
+    fields.forEach(f => {
+        const card = document.createElement('div');
+        card.className = 'gf-card p-6 pb-8';
+        card.onclick = () => {
+            document.querySelectorAll('.gf-card').forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+        };
+
+        const requiredMark = f.required ? '<span class="text-red-600 ml-1">*</span>' : '';
+        let inputHtml = '';
+
+        if (f.type === 'text') {
+            inputHtml = `<input type="text" name="${f.id}" ${f.required ? 'required' : ''} class="gf-input w-1/2" placeholder="Your answer">`;
+        } else if (f.type === 'textarea') {
+            inputHtml = `<textarea name="${f.id}" ${f.required ? 'required' : ''} class="gf-input w-full resize-none" rows="1" oninput="this.style.height = '';this.style.height = this.scrollHeight + 'px'" placeholder="Your answer"></textarea>`;
+        } else if (f.type === 'radio') {
+            inputHtml = '<div class="space-y-4">';
+            f.options.forEach((opt, i) => {
+                inputHtml += `
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="radio" name="${f.id}" value="${opt}" ${f.required ? 'required' : ''} class="gf-radio">
+                        <span class="text-gray-700">${opt}</span>
+                    </label>
+                `;
             });
+            inputHtml += '</div>';
+        } else if (f.type === 'checkbox') {
+            inputHtml = '<div class="space-y-4">';
+            f.options.forEach((opt, i) => {
+                inputHtml += `
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="checkbox" name="${f.id}[]" value="${opt}" class="gf-checkbox">
+                        <span class="text-gray-700">${opt}</span>
+                    </label>
+                `;
+            });
+            inputHtml += '</div>';
+            // Custom validation for required checkbox group
+            if (f.required) {
+                inputHtml += `<input type="hidden" id="req_${f.id}" required value="">`;
+            }
+        }
+
+        card.innerHTML = `
+            <div class="mb-6">
+                <span class="text-base font-normal text-gray-800">${f.label}${requiredMark}</span>
+            </div>
+            <div class="pl-2">
+                ${inputHtml}
+            </div>
+        `;
+
+        if (f.type === 'checkbox' && f.required) {
+            // Add listener to manage hidden required field
+            card.addEventListener('change', () => {
+                const checked = card.querySelectorAll(`input[type="checkbox"]:checked`).length > 0;
+                document.getElementById(`req_${f.id}`).value = checked ? 'valid' : '';
+            });
+        }
+
+        container.appendChild(card);
+    });
+
+    async function submitForm(e) {
+        e.preventDefault();
+        const formEl = document.getElementById('submissionForm');
+        if (!formEl.reportValidity()) return;
+
+        const formData = new FormData(formEl);
+        const submission = {};
+
+        fields.forEach(f => {
+            if (f.type === 'checkbox') {
+                submission[f.label] = formData.getAll(`${f.id}[]`);
+            } else {
+                submission[f.label] = formData.get(f.id);
+            }
         });
-    };
+
+        try {
+            const btn = formEl.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = "Submitting...";
+
+            const res = await fetch("{{ url_for('forms.view_form', form_id=form.id) }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(submission)
+            });
+
+            if (res.ok) {
+                // Show success screen inside the card
+                document.querySelector('.max-w-3xl').innerHTML = `
+                    <div class="gf-card gf-top-card p-8 mt-8">
+                        <h1 class="text-3xl font-normal text-gray-900 mb-4">{{ form.title }}</h1>
+                        <p class="text-gray-700 mb-6">Your response has been recorded.</p>
+                        <a href="javascript:window.location.reload()" class="text-blue-600 hover:underline text-sm">Submit another response</a>
+                    </div>
+                `;
+            } else {
+                alert("Failed to submit form.");
+                btn.disabled = false;
+                btn.textContent = "Submit";
+            }
+        } catch (err) {
+            alert("Error submitting form.");
+        }
+    }
 </script>
 {% endblock %}

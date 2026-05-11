@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-6 py-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800">{{ form.title }} - Submissions</h2>
+            <p class="text-sm text-gray-500 mt-1">Total: {{ submissions|length }} responses</p>
+        </div>
+        <div class="flex space-x-3">
+            <a href="{{ url_for('forms.dashboard') }}" class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Back to Dashboard</a>
+        </div>
+    </div>
+
+    {% if is_admin %}
+    <!-- Collaborator Management Section -->
+    <div class="px-6 py-5 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-800 mb-4">Collaborators</h3>
+        
+        <div class="flex items-center space-x-4 mb-4">
+            <input type="text" id="collaborator-username" placeholder="Wikimedia Username" class="flex-1 px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            <button onclick="addCollaborator()" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700">Add User</button>
+        </div>
+
+        <ul class="divide-y divide-gray-200 border border-gray-200 rounded-md">
+            {% for perm in collaborators %}
+            <li class="px-4 py-3 flex justify-between items-center" id="collab-{{ perm.username }}">
+                <div class="flex items-center">
+                    <span class="font-medium text-gray-900">{{ perm.username }}</span>
+                    <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if perm.role == 'admin' %}bg-purple-100 text-purple-800{% else %}bg-green-100 text-green-800{% endif %}">
+                        {{ perm.role|title }}
+                    </span>
+                </div>
+                {% if perm.role != 'admin' %}
+                <button onclick="removeCollaborator('{{ perm.username }}')" class="text-red-600 hover:text-red-900 text-sm font-medium">Remove</button>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Submissions Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted By</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response Data</th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for sub in submissions %}
+                <tr id="sub-{{ sub.id }}">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ sub.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {{ sub.submitted_by or 'Anonymous' }}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        <button onclick="toggleData('{{ sub.id }}')" class="text-blue-600 hover:text-blue-900 underline">View JSON</button>
+                        <pre id="data-{{ sub.id }}" class="hidden mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">{{ sub.data }}</pre>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="deleteSubmission({{ sub.id }})" class="text-red-600 hover:text-red-900">Delete</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">
+                        No submissions yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function toggleData(id) {
+        const el = document.getElementById('data-' + id);
+        if (el.classList.contains('hidden')) {
+            try {
+                // Try to pretty print if it's not already
+                const obj = JSON.parse(el.innerText);
+                el.innerText = JSON.stringify(obj, null, 2);
+            } catch(e) {}
+            el.classList.remove('hidden');
+        } else {
+            el.classList.add('hidden');
+        }
+    }
+
+    async function deleteSubmission(id) {
+        if (!confirm("Are you sure you want to delete this submission? This cannot be undone.")) return;
+        
+        try {
+            const res = await fetch(`/api/form/{{ form.id }}/submission/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                document.getElementById('sub-' + id).remove();
+            } else {
+                alert("Failed to delete submission.");
+            }
+        } catch (e) {
+            alert("Error: " + e);
+        }
+    }
+
+    {% if is_admin %}
+    async function addCollaborator() {
+        const username = document.getElementById('collaborator-username').value.trim();
+        if (!username) return alert("Enter a username");
+        
+        try {
+            const res = await fetch(`/api/form/{{ form.id }}/collaborator`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                window.location.reload();
+            } else {
+                alert(data.error || "Failed to add collaborator");
+            }
+        } catch (e) {
+            alert("Error: " + e);
+        }
+    }
+
+    async function removeCollaborator(username) {
+        if (!confirm(`Remove access for ${username}?`)) return;
+        
+        try {
+            const res = await fetch(`/api/form/{{ form.id }}/collaborator/${encodeURIComponent(username)}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (res.ok) {
+                document.getElementById('collab-' + username).remove();
+            } else {
+                alert(data.error || "Failed to remove collaborator");
+            }
+        } catch (e) {
+            alert("Error: " + e);
+        }
+    }
+    {% endif %}
+</script>
+{% endblock %}

@@ -1,78 +1,224 @@
 {% extends "base.html" %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://cdn.form.io/formiojs/formio.full.min.css">
-<script src="https://cdn.form.io/formiojs/formio.full.min.js"></script>
+<!-- Icons -->
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+    /* Google Forms aesthetic styles */
+    .gf-card {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+        margin-bottom: 24px;
+        transition: box-shadow 0.2s;
+    }
+    .gf-card.active {
+        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+        border-left: 4px solid #4285f4;
+    }
+    .gf-top-card {
+        border-top: 10px solid #673ab7;
+    }
+    .gf-input-title {
+        font-family: "Google Sans", Roboto, Arial, sans-serif;
+        font-size: 24pt;
+        border: none;
+        border-bottom: 1px solid #e0e0e0;
+        border-radius: 0;
+        padding: 8px 0;
+        background: transparent;
+    }
+    .gf-input-title:focus {
+        outline: none;
+        border-bottom: 2px solid #673ab7;
+        padding-bottom: 7px;
+    }
+    .gf-input-question {
+        font-size: 16px;
+        font-weight: 500;
+        border: none;
+        background: #f8f9fa;
+        padding: 16px;
+        border-bottom: 1px solid #70757a;
+        width: 100%;
+        border-radius: 4px 4px 0 0;
+    }
+    .gf-input-question:focus {
+        outline: none;
+        border-bottom: 2px solid #673ab7;
+        background: #f1f3f4;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="bg-white shadow sm:rounded-lg p-6">
-    <h2 class="text-2xl font-bold mb-4">Create New Form</h2>
-    
-    <form method="POST" action="{{ url_for('forms.builder') }}" id="saveForm">
-        <div class="mb-4">
-            <label for="title" class="block text-sm font-medium text-gray-700">Form Title</label>
-            <input type="text" name="title" id="title" required class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
+<div class="max-w-3xl mx-auto py-8">
+    <form method="POST" action="{{ url_for('forms.builder') }}" id="builderForm">
+        <!-- Title Card -->
+        <div class="gf-card gf-top-card p-6" onclick="setActive(this)">
+            <input type="text" name="title" id="formTitle" placeholder="Untitled form" required class="gf-input-title w-full mb-4">
+            <input type="text" id="formDesc" placeholder="Form description" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300">
         </div>
         
         <input type="hidden" name="schema" id="schemaInput">
-        
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Form Builder</label>
-            <div id="builder" class="border border-gray-300 rounded p-4 bg-gray-50"></div>
+
+        <div id="fieldsContainer">
+            <!-- Fields injected here -->
         </div>
-        
-        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            Save Form
-        </button>
+
+        <div class="flex justify-between items-center mt-8">
+            <button type="button" onclick="addField()" class="flex items-center space-x-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-full hover:bg-gray-50 shadow-sm">
+                <span class="material-icons">add</span>
+                <span class="font-medium">Add question</span>
+            </button>
+            
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md shadow">
+                Save Form
+            </button>
+        </div>
     </form>
 </div>
 
 <script>
-    window.onload = function() {
-        Formio.builder(document.getElementById('builder'), {}, {
-            builder: {
-                basic: false,
-                advanced: false,
-                data: false,
-                premium: false,
-                customBasic: {
-                    title: 'Basic Components',
-                    default: true,
-                    weight: 0,
-                    components: {
-                        textfield: true,
-                        textarea: true,
-                        email: true,
-                        phoneNumber: true,
-                        number: true,
-                        checkbox: true,
-                        selectboxes: true,
-                        select: true,
-                        radio: true,
-                        button: true
-                    }
-                }
+    let fields = [];
+    
+    function generateId() {
+        return 'field_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    function setActive(el) {
+        document.querySelectorAll('.gf-card').forEach(c => c.classList.remove('active'));
+        if(el) el.classList.add('active');
+    }
+
+    function addField() {
+        const field = {
+            id: generateId(),
+            type: 'text',
+            label: 'Question',
+            required: false,
+            options: ['Option 1']
+        };
+        fields.push(field);
+        renderFields();
+    }
+
+    function removeField(id) {
+        fields = fields.filter(f => f.id !== id);
+        renderFields();
+    }
+
+    function updateField(id, key, value) {
+        const field = fields.find(f => f.id === id);
+        if (field) {
+            field[key] = value;
+            if (key === 'type') renderFields();
+        }
+    }
+
+    function addOption(id) {
+        const field = fields.find(f => f.id === id);
+        if (field && field.options) {
+            field.options.push(`Option ${field.options.length + 1}`);
+            renderFields();
+        }
+    }
+
+    function updateOption(id, index, value) {
+        const field = fields.find(f => f.id === id);
+        if (field && field.options) {
+            field.options[index] = value;
+        }
+    }
+
+    function removeOption(id, index) {
+        const field = fields.find(f => f.id === id);
+        if (field && field.options && field.options.length > 1) {
+            field.options.splice(index, 1);
+            renderFields();
+        }
+    }
+
+    function renderFields() {
+        const container = document.getElementById('fieldsContainer');
+        container.innerHTML = '';
+
+        fields.forEach(f => {
+            const card = document.createElement('div');
+            card.className = 'gf-card p-6';
+            card.onclick = () => setActive(card);
+
+            let optionsHtml = '';
+            if (['radio', 'checkbox'].includes(f.type)) {
+                optionsHtml = '<div class="mt-4 space-y-2">';
+                f.options.forEach((opt, idx) => {
+                    const icon = f.type === 'radio' ? 'radio_button_unchecked' : 'check_box_outline_blank';
+                    optionsHtml += `
+                        <div class="flex items-center space-x-3 group">
+                            <span class="material-icons text-gray-400">${icon}</span>
+                            <input type="text" value="${opt}" onchange="updateOption('${f.id}', ${idx}, this.value)" class="flex-1 border-none border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:ring-0 px-0 py-1 text-sm">
+                            <button type="button" onclick="removeOption('${f.id}', ${idx})" class="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="material-icons">close</span>
+                            </button>
+                        </div>
+                    `;
+                });
+                optionsHtml += `
+                    <div class="flex items-center space-x-3 mt-2">
+                        <span class="material-icons text-gray-400">${f.type === 'radio' ? 'radio_button_unchecked' : 'check_box_outline_blank'}</span>
+                        <button type="button" onclick="addOption('${f.id}')" class="text-sm text-gray-500 hover:border-b hover:border-gray-300 py-1">Add option</button>
+                    </div>
+                </div>`;
             }
-        }).then(function(builder) {
-            builder.on('saveComponent', function() {
-                document.getElementById('schemaInput').value = JSON.stringify(builder.schema);
-            });
-            builder.on('editComponent', function() {
-                document.getElementById('schemaInput').value = JSON.stringify(builder.schema);
-            });
-            builder.on('deleteComponent', function() {
-                document.getElementById('schemaInput').value = JSON.stringify(builder.schema);
-            });
-            
-            // Initial schema
-            document.getElementById('schemaInput').value = JSON.stringify(builder.schema);
-            
-            document.getElementById('saveForm').addEventListener('submit', function(e) {
-                // Ensure latest schema is saved
-                document.getElementById('schemaInput').value = JSON.stringify(builder.schema);
-            });
+
+            let previewHtml = '';
+            if (f.type === 'text') previewHtml = '<div class="mt-4 border-b border-dotted border-gray-400 w-1/2 py-2 text-sm text-gray-400">Short answer text</div>';
+            if (f.type === 'textarea') previewHtml = '<div class="mt-4 border-b border-dotted border-gray-400 w-full py-2 text-sm text-gray-400">Long answer text</div>';
+
+            card.innerHTML = `
+                <div class="flex items-start space-x-4">
+                    <div class="flex-1">
+                        <input type="text" value="${f.label}" onchange="updateField('${f.id}', 'label', this.value)" placeholder="Question" class="gf-input-question">
+                    </div>
+                    <div class="w-48">
+                        <select onchange="updateField('${f.id}', 'type', this.value)" class="block w-full pl-3 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md bg-gray-50">
+                            <option value="text" ${f.type === 'text' ? 'selected' : ''}>Short answer</option>
+                            <option value="textarea" ${f.type === 'textarea' ? 'selected' : ''}>Paragraph</option>
+                            <option value="radio" ${f.type === 'radio' ? 'selected' : ''}>Multiple choice</option>
+                            <option value="checkbox" ${f.type === 'checkbox' ? 'selected' : ''}>Checkboxes</option>
+                        </select>
+                    </div>
+                </div>
+                ${optionsHtml}
+                ${previewHtml}
+                
+                <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end items-center space-x-4">
+                    <button type="button" onclick="removeField('${f.id}')" class="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100" title="Delete">
+                        <span class="material-icons">delete</span>
+                    </button>
+                    <div class="h-6 w-px bg-gray-300"></div>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <span class="text-sm font-medium text-gray-700">Required</span>
+                        <div class="relative">
+                            <input type="checkbox" ${f.required ? 'checked' : ''} onchange="updateField('${f.id}', 'required', this.checked)" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        </div>
+                    </label>
+                </div>
+            `;
+            container.appendChild(card);
         });
+    }
+
+    document.getElementById('builderForm').onsubmit = function(e) {
+        const schema = {
+            description: document.getElementById('formDesc').value,
+            fields: fields
+        };
+        document.getElementById('schemaInput').value = JSON.stringify(schema);
     };
+
+    // Add first field by default
+    addField();
 </script>
 {% endblock %}

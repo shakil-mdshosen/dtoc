@@ -68,7 +68,10 @@ def dashboard():
     form_ids = [p.form_id for p in perms]
     forms = Form.query.filter(Form.id.in_(form_ids)).all()
     
-    return render_template('dashboard.html', forms=forms)
+    # Create a mapping of form_id to role for easy template access
+    roles = {p.form_id: p.role for p in perms}
+    
+    return render_template('dashboard.html', forms=forms, roles=roles)
 
 @forms_bp.route('/form/<int:form_id>/close', methods=['POST'])
 @login_required
@@ -90,3 +93,101 @@ def close_form(form_id):
     
     flash("Form closed. Data will be retained for 90 days.", "info")
     return redirect(url_for('forms.dashboard'))
+
+@forms_bp.route('/form/<int:form_id>/reopen', methods=['POST'])
+@login_required
+def reopen_form(form_id):
+    form = Form.query.get_or_404(form_id)
+    perm = Permission.query.filter_by(form_id=form.id, username=session['username'], role='admin').first()
+    if not perm:
+        flash("You don't have permission to reopen this form.", "danger")
+        return redirect(url_for('forms.dashboard'))
+        
+    form.is_active = True
+    form.closed_at = None
+    
+    log = AuditLog(action='REOPEN_FORM', details=f"Form {form.id} reopened by {session['username']}")
+    db.session.add(log)
+    db.session.commit()
+    
+    flash("Form successfully reopened.", "success")
+    return redirect(url_for('forms.dashboard'))
+
+@forms_bp.route('/form/<int:form_id>/submissions')
+@login_required
+def view_submissions(form_id):
+    form = Form.query.get_or_404(form_id)
+    perm = Permission.query.filter_by(form_id=form.id, username=session['username']).first()
+    if not perm:
+        flash("You don't have permission to view these submissions.", "danger")
+        return redirect(url_for('forms.dashboard'))
+        
+    submissions = Submission.query.filter_by(form_id=form.id).order_by(Submission.submitted_at.desc()).all()
+    # Also fetch collaborators for management if admin
+    collaborators = []
+    is_admin = perm.role == 'admin'
+    if is_admin:
+        collaborators = Permission.query.filter_by(form_id=form.id).all()
+        
+    return render_template('submissions.html', form=form, submissions=submissions, is_admin=is_admin, collaborators=collaborators)
+
+@forms_bp.route('/api/form/<int:form_id>/submission/<int:sub_id>', methods=['DELETE'])
+@login_required
+def delete_submission(form_id, sub_id):
+    perm = Permission.query.filter_by(form_id=form_id, username=session['username']).first()
+    if not perm:
+        return jsonify({"error": "Unauthorized"}), 403
+        
+    sub = Submission.query.get_or_404(sub_id)
+    if sub.form_id != form_id:
+        return jsonify({"error": "Bad request"}), 400
+        
+    db.session.delete(sub)
+    log = AuditLog(action='DELETE_SUBMISSION', details=f"Submission {sub_id} from Form {form_id} deleted by {session['username']}")
+    db.session.add(log)
+    db.session.commit()
+    return jsonify({"status": "success"})
+
+@forms_bp.route('/api/form/<int:form_id>/collaborator', methods=['POST'])
+@login_required
+def add_collaborator(form_id):
+    perm = Permission.query.filter_by(form_id=form_id, username=session['username'], role='admin').first()
+    if not perm:
+        return jsonify({"error": "Only admins can add collaborators"}), 403
+        
+    username = request.json.get('username')
+    if not username:
+        return jsonify({"error": "Username required"}), 400
+        
+    existing = Permission.query.filter_by(form_id=form_id, username=username).first()
+    if existing:
+        return jsonify({"error": "User is already a collaborator"}), 400
+        
+    new_perm = Permission(form_id=form_id, username=username, role='viewer')
+    db.session.add(new_perm)
+    log = AuditLog(action='ADD_COLLABORATOR', details=f"Collaborator {username} added to Form {form_id} by {session['username']}")
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({"status": "success", "username": username, "role": "viewer"})
+
+@forms_bp.route('/api/form/<int:form_id>/collaborator/<username>', methods=['DELETE'])
+@login_required
+def remove_collaborator(form_id, username):
+    perm = Permission.query.filter_by(form_id=form_id, username=session['username'], role='admin').first()
+    if not perm:
+        return jsonify({"error": "Only admins can remove collaborators"}), 403
+        
+    target_perm = Permission.query.filter_by(form_id=form_id, username=username).first()
+    if not target_perm:
+        return jsonify({"error": "Collaborator not found"}), 404
+        
+    if target_perm.role == 'admin' and target_perm.username == session['username']:
+        return jsonify({"error": "Cannot remove yourself as admin"}), 400
+        
+    db.session.delete(target_perm)
+    log = AuditLog(action='REMOVE_COLLABORATOR', details=f"Collaborator {username} removed from Form {form_id} by {session['username']}")
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({"status": "success"})
