@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, flash
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, flash, current_app
 from models import db, Form, Submission, Permission, AuditLog
 import json
 import base64
@@ -8,6 +8,7 @@ from functools import wraps
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
+from urllib.parse import quote
 
 forms_bp = Blueprint('forms', __name__)
 HEADER_IMAGE_MAX_BYTES = 2 * 1024 * 1024
@@ -146,12 +147,33 @@ def sanitize_schema(raw_schema):
         schema.pop('header_image_url', None)
     return schema
 
+
+def escape_like_pattern(value):
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
+def is_owner_user(username):
+    owner_username = (current_app.config.get('OWNER_USERNAME') or '').strip()
+    current_user = (username or '').strip()
+    return bool(owner_username) and current_user.casefold() == owner_username.casefold()
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
             flash("Please log in to access this page.", "warning")
             return redirect(url_for('auth.login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def owner_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not is_owner_user(session.get('username')):
+            flash("You don't have permission to access the owner dashboard.", "danger")
+            return redirect(url_for('forms.dashboard'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -221,6 +243,59 @@ def dashboard():
     roles = {p.form_id: p.role for p in perms}
     
     return render_template('dashboard.html', forms=forms, roles=roles)
+
+
+@forms_bp.route('/owner/dashboard')
+@login_required
+@owner_required
+def owner_dashboard():
+    creator_filter = (request.args.get('creator') or '').strip()
+    title_filter = (request.args.get('title') or '').strip()
+    status_filter = (request.args.get('status') or 'all').strip().lower()
+    if status_filter not in {'all', 'active', 'closed'}:
+        status_filter = 'all'
+
+    query = (
+        db.session.query(Form, db.func.count(Submission.id).label('total_responses'))
+        .outerjoin(Submission, Submission.form_id == Form.id)
+    )
+
+    if creator_filter:
+        creator_pattern = '%' + escape_like_pattern(creator_filter) + '%'
+        query = query.filter(Form.created_by.ilike(creator_pattern, escape='\\'))
+    if title_filter:
+        title_pattern = '%' + escape_like_pattern(title_filter) + '%'
+        query = query.filter(Form.title.ilike(title_pattern, escape='\\'))
+    if status_filter == 'active':
+        query = query.filter(Form.is_active.is_(True))
+    elif status_filter == 'closed':
+        query = query.filter(Form.is_active.is_(False))
+
+    records = (
+        query.group_by(Form.id)
+        .order_by(Form.created_at.desc())
+        .all()
+    )
+    rows = [
+        {
+            'creator': form.created_by,
+            'title': form.title,
+            'encoded_title': quote(form.title, safe=''),
+            'created_at': form.created_at,
+            'closed_at': form.closed_at,
+            'total_responses': total_responses,
+            'form_url': url_for('forms.view_form', form_id=form.id, _external=True),
+        }
+        for form, total_responses in records
+    ]
+
+    return render_template(
+        'owner_dashboard.html',
+        rows=rows,
+        creator_filter=creator_filter,
+        title_filter=title_filter,
+        status_filter=status_filter
+    )
 
 @forms_bp.route('/form/<int:form_id>/close', methods=['POST'])
 @login_required

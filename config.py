@@ -2,6 +2,7 @@ import os
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
+    OWNER_USERNAME = os.environ.get("OWNER_USERNAME", "MdsShakil")
     
     # OAuth configuration
     WIKI_CLIENT_ID = os.environ.get("WIKI_CLIENT_ID")
