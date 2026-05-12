@@ -26,3 +26,11 @@ class Config:
         SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'dtoc.db')
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Toolforge drops idle database connections aggressively, which causes 500 errors.
+    # pool_pre_ping checks if the connection is alive before using it.
+    # pool_recycle reconnects automatically after 5 minutes (300 seconds).
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
