@@ -34,8 +34,7 @@
         <thead class="bg-gray-50">
             <tr>
                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Creator</th>
-                <th class="px-4 py-3 text-left font-semibold text-gray-700">Form Name (URL encoded)</th>
-                <th class="px-4 py-3 text-left font-semibold text-gray-700">Form URL</th>
+                <th class="px-4 py-3 text-left font-semibold text-gray-700">Form Name</th>
                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Creation Date</th>
                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Closing Date</th>
                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Total Responses</th>
@@ -45,8 +44,7 @@
             {% for row in rows %}
             <tr>
                 <td class="px-4 py-3">{{ row.creator }}</td>
-                <td class="px-4 py-3 break-all">{{ row.encoded_title }}</td>
-                <td class="px-4 py-3 break-all"><a href="{{ row.form_url }}" class="text-blue-600 hover:text-blue-800" target="_blank" rel="noopener noreferrer">{{ row.form_url }}</a></td>
+                <td class="px-4 py-3 break-words"><a href="{{ row.form_url }}" class="text-blue-600 hover:text-blue-800" target="_blank" rel="noopener noreferrer">{{ row.title }}</a></td>
                 <td class="px-4 py-3">{{ row.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                 <td class="px-4 py-3">
                     {% if row.closed_at %}
@@ -59,7 +57,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="6" class="px-4 py-6 text-gray-500 italic text-center">No forms found for the selected filters.</td>
+                <td colspan="5" class="px-4 py-6 text-gray-500 italic text-center">No forms found for the selected filters.</td>
             </tr>
             {% endfor %}
         </tbody>

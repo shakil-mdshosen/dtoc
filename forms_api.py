@@ -8,7 +8,6 @@ from functools import wraps
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
-from urllib.parse import quote
 
 forms_bp = Blueprint('forms', __name__)
 HEADER_IMAGE_MAX_BYTES = 2 * 1024 * 1024
@@ -280,7 +279,6 @@ def owner_dashboard():
         {
             'creator': form.created_by,
             'title': form.title,
-            'encoded_title': quote(form.title, safe=''),
             'created_at': form.created_at,
             'closed_at': form.closed_at,
             'total_responses': total_responses,

@@ -75,12 +75,12 @@ def test_owner_dashboard_shows_table_and_filters(app, client):
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'Owner%20Survey' in html
+    assert 'Owner Survey' in html
     assert 'AnotherUser' in html
     assert '>2<' in html
 
     filtered = client.get('/owner/dashboard?creator=AnotherUser&status=closed')
     filtered_html = filtered.get_data(as_text=True)
     assert filtered.status_code == 200
-    assert 'Team%20Feedback' in filtered_html
-    assert 'Owner%20Survey' not in filtered_html
+    assert 'Team Feedback' in filtered_html
+    assert 'Owner Survey' not in filtered_html
