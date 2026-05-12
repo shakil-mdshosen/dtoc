@@ -1,7 +1,9 @@
 import requests
 
-CLIENT_ID = "ae071ef7591ed1771dbe77e5cdae49d5"
-CLIENT_SECRET = "08dcd9b3e19195e2611261ebf5d4e09e68112f65"
+import os
+
+CLIENT_ID = os.environ.get("WIKI_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("WIKI_CLIENT_SECRET", "")
 TOKEN_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/access_token'
 
 def test_auth():
