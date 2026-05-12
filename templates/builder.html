@@ -88,7 +88,11 @@
                 <img id="headerImagePreview" alt="Header preview" class="w-full max-h-56 object-cover rounded-lg border border-gray-200">
             </div>
             <input type="text" name="title" id="formTitle" placeholder="Untitled form" required class="gf-input-title w-full mb-4">
-            <input type="url" id="formHeaderImage" placeholder="Header image URL (https://...)" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300 mb-4" oninput="updateHeaderPreview()">
+            <input type="url" id="formHeaderImage" placeholder="Header image URL (https://...)" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300 mb-2" oninput="handleHeaderImageUrlInput()">
+            <div class="mb-4">
+                <label for="formHeaderImageFile" class="block text-sm text-gray-600 mb-1">Or upload header image (PNG, JPEG, GIF, WEBP - max 2 MB)</label>
+                <input type="file" id="formHeaderImageFile" accept="image/png,image/jpeg,image/gif,image/webp" class="w-full text-sm text-gray-600" onchange="handleHeaderImageUpload(event)">
+            </div>
             <div class="flex flex-wrap items-center gap-2 mb-2" onclick="event.stopPropagation()">
                 <button type="button" class="toolbar-btn" onclick="formatDescription('bold')" title="Bold"><span class="material-icons text-base">format_bold</span></button>
                 <button type="button" class="toolbar-btn" onclick="formatDescription('italic')" title="Italic"><span class="material-icons text-base">format_italic</span></button>
@@ -123,6 +127,9 @@
 
 <script>
     let fields = [];
+    let uploadedHeaderImageDataUrl = '';
+    const HEADER_IMAGE_MAX_SIZE_BYTES = 2 * 1024 * 1024;
+    const ALLOWED_HEADER_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
     const ALLOWED_DESC_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a']);
     
     function generateId() {
@@ -248,13 +255,63 @@
         const value = sanitizeUrl(document.getElementById('formHeaderImage').value);
         const wrapper = document.getElementById('headerImagePreviewWrapper');
         const image = document.getElementById('headerImagePreview');
-        if (value) {
-            image.src = value;
+        const previewValue = uploadedHeaderImageDataUrl || value;
+        if (previewValue) {
+            image.src = previewValue;
             wrapper.classList.remove('hidden');
         } else {
             image.removeAttribute('src');
             wrapper.classList.add('hidden');
         }
+    }
+
+    function handleHeaderImageUrlInput() {
+        const headerUrl = document.getElementById('formHeaderImage').value.trim();
+        if (headerUrl) {
+            uploadedHeaderImageDataUrl = '';
+            document.getElementById('formHeaderImageFile').value = '';
+        }
+        updateHeaderPreview();
+    }
+
+    function handleHeaderImageUpload(event) {
+        const fileInput = event.target;
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+            uploadedHeaderImageDataUrl = '';
+            updateHeaderPreview();
+            return;
+        }
+
+        if (!ALLOWED_HEADER_MIME_TYPES.has(file.type)) {
+            alert('Please upload a PNG, JPEG, GIF, or WEBP image.');
+            fileInput.value = '';
+            uploadedHeaderImageDataUrl = '';
+            updateHeaderPreview();
+            return;
+        }
+
+        if (file.size > HEADER_IMAGE_MAX_SIZE_BYTES) {
+            alert('Header image must be 2 MB or smaller.');
+            fileInput.value = '';
+            uploadedHeaderImageDataUrl = '';
+            updateHeaderPreview();
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            uploadedHeaderImageDataUrl = typeof reader.result === 'string' ? reader.result : '';
+            document.getElementById('formHeaderImage').value = '';
+            updateHeaderPreview();
+        };
+        reader.onerror = () => {
+            alert('Failed to read the selected image.');
+            fileInput.value = '';
+            uploadedHeaderImageDataUrl = '';
+            updateHeaderPreview();
+        };
+        reader.readAsDataURL(file);
     }
 
     function renderFields() {
@@ -344,7 +401,7 @@
         const schema = {
             description_html: descriptionHtml,
             description: document.getElementById('formDescEditor').innerText.trim(),
-            header_image_url: sanitizeUrl(document.getElementById('formHeaderImage').value),
+            header_image_url: uploadedHeaderImageDataUrl || sanitizeUrl(document.getElementById('formHeaderImage').value),
             fields: fields
         };
         document.getElementById('schemaInput').value = JSON.stringify(schema);

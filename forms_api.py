@@ -1,12 +1,20 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, flash
 from models import db, Form, Submission, Permission, AuditLog
 import json
+import base64
+import binascii
+import re
 from functools import wraps
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
 forms_bp = Blueprint('forms', __name__)
+HEADER_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+DATA_IMAGE_PATTERN = re.compile(
+    r'^data:(image/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$',
+    re.IGNORECASE
+)
 
 ALLOWED_DESCRIPTION_TAGS = {
     'b', 'strong', 'i', 'em', 'u', 's', 'strike',
@@ -88,6 +96,16 @@ def sanitize_header_image_url(url):
         return ''
     value = url.strip()
     if not value:
+        return ''
+    data_match = DATA_IMAGE_PATTERN.match(value)
+    if data_match:
+        encoded = data_match.group(2)
+        try:
+            decoded = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error):
+            return ''
+        if len(decoded) <= HEADER_IMAGE_MAX_BYTES:
+            return value
         return ''
     parsed = urlparse(value)
     if parsed.scheme.lower() in {'http', 'https'} and parsed.netloc:
