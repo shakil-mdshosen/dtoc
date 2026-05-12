@@ -48,6 +48,34 @@
         border-bottom: 2px solid #673ab7;
         background: #f1f3f4;
     }
+    .rich-editor {
+        min-height: 72px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 14px;
+        color: #4b5563;
+        line-height: 1.5;
+    }
+    .rich-editor:focus {
+        outline: none;
+        border-color: #d1d5db;
+        background: #f9fafb;
+    }
+    .rich-editor:empty:before {
+        content: attr(data-placeholder);
+        color: #9ca3af;
+    }
+    .toolbar-btn {
+        border: 1px solid #e5e7eb;
+        border-radius: 9999px;
+        padding: 6px;
+        color: #4b5563;
+        line-height: 1;
+    }
+    .toolbar-btn:hover {
+        background: #f3f4f6;
+    }
 </style>
 {% endblock %}
 
@@ -56,8 +84,22 @@
     <form method="POST" action="{{ url_for('forms.builder') }}" id="builderForm">
         <!-- Title Card -->
         <div class="gf-card gf-top-card p-5 sm:p-8" onclick="setActive(this)">
+            <div id="headerImagePreviewWrapper" class="hidden mb-5">
+                <img id="headerImagePreview" alt="Header preview" class="w-full max-h-56 object-cover rounded-lg border border-gray-200">
+            </div>
             <input type="text" name="title" id="formTitle" placeholder="Untitled form" required class="gf-input-title w-full mb-4">
-            <input type="text" id="formDesc" placeholder="Form description" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300">
+            <input type="url" id="formHeaderImage" placeholder="Header image URL (https://...)" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300 mb-4" oninput="updateHeaderPreview()">
+            <div class="flex flex-wrap items-center gap-2 mb-2" onclick="event.stopPropagation()">
+                <button type="button" class="toolbar-btn" onclick="formatDescription('bold')" title="Bold"><span class="material-icons text-base">format_bold</span></button>
+                <button type="button" class="toolbar-btn" onclick="formatDescription('italic')" title="Italic"><span class="material-icons text-base">format_italic</span></button>
+                <button type="button" class="toolbar-btn" onclick="formatDescription('underline')" title="Underline"><span class="material-icons text-base">format_underlined</span></button>
+                <button type="button" class="toolbar-btn" onclick="formatDescription('strikeThrough')" title="Strikethrough"><span class="material-icons text-base">strikethrough_s</span></button>
+                <button type="button" class="toolbar-btn" onclick="formatDescription('insertUnorderedList')" title="Bulleted list"><span class="material-icons text-base">format_list_bulleted</span></button>
+                <button type="button" class="toolbar-btn" onclick="formatDescription('insertOrderedList')" title="Numbered list"><span class="material-icons text-base">format_list_numbered</span></button>
+                <button type="button" class="toolbar-btn" onclick="insertDescriptionLink()" title="Insert link"><span class="material-icons text-base">link</span></button>
+                <button type="button" class="toolbar-btn" onclick="formatDescription('removeFormat')" title="Clear formatting"><span class="material-icons text-base">format_clear</span></button>
+            </div>
+            <div id="formDescEditor" class="rich-editor" contenteditable="true" data-placeholder="Form description"></div>
         </div>
         
         <input type="hidden" name="schema" id="schemaInput">
@@ -81,6 +123,7 @@
 
 <script>
     let fields = [];
+    const ALLOWED_DESC_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a']);
     
     function generateId() {
         return 'field_' + Math.random().toString(36).substr(2, 9);
@@ -136,6 +179,81 @@
         if (field && field.options && field.options.length > 1) {
             field.options.splice(index, 1);
             renderFields();
+        }
+    }
+
+    function sanitizeUrl(url, allowMailTo = false) {
+        if (!url) return '';
+        const trimmed = url.trim();
+        try {
+            const parsed = new URL(trimmed);
+            const protocols = allowMailTo ? ['http:', 'https:', 'mailto:'] : ['http:', 'https:'];
+            return protocols.includes(parsed.protocol) ? trimmed : '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function sanitizeDescriptionHtml(html) {
+        const template = document.createElement('template');
+        template.innerHTML = html || '';
+
+        const sanitizeNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) return;
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                node.remove();
+                return;
+            }
+
+            const tagName = node.tagName.toLowerCase();
+            [...node.childNodes].forEach(sanitizeNode);
+            if (!ALLOWED_DESC_TAGS.has(tagName)) {
+                const fragment = document.createDocumentFragment();
+                while (node.firstChild) fragment.appendChild(node.firstChild);
+                node.replaceWith(fragment);
+                return;
+            }
+
+            const originalHref = tagName === 'a' ? node.getAttribute('href') : '';
+            [...node.attributes].forEach(attr => node.removeAttribute(attr.name));
+            if (tagName === 'a') {
+                const href = sanitizeUrl(originalHref, true);
+                if (href) {
+                    node.setAttribute('href', href);
+                    node.setAttribute('target', '_blank');
+                    node.setAttribute('rel', 'noopener noreferrer nofollow');
+                }
+            }
+
+        };
+
+        [...template.content.childNodes].forEach(sanitizeNode);
+        return template.innerHTML.trim();
+    }
+
+    function formatDescription(command) {
+        document.getElementById('formDescEditor').focus();
+        document.execCommand(command, false, null);
+    }
+
+    function insertDescriptionLink() {
+        const link = prompt('Enter URL (https://...)');
+        const safe = sanitizeUrl(link, true);
+        if (!safe) return;
+        document.getElementById('formDescEditor').focus();
+        document.execCommand('createLink', false, safe);
+    }
+
+    function updateHeaderPreview() {
+        const value = sanitizeUrl(document.getElementById('formHeaderImage').value);
+        const wrapper = document.getElementById('headerImagePreviewWrapper');
+        const image = document.getElementById('headerImagePreview');
+        if (value) {
+            image.src = value;
+            wrapper.classList.remove('hidden');
+        } else {
+            image.removeAttribute('src');
+            wrapper.classList.add('hidden');
         }
     }
 
@@ -222,8 +340,11 @@
     }
 
     document.getElementById('builderForm').onsubmit = function(e) {
+        const descriptionHtml = sanitizeDescriptionHtml(document.getElementById('formDescEditor').innerHTML);
         const schema = {
-            description: document.getElementById('formDesc').value,
+            description_html: descriptionHtml,
+            description: document.getElementById('formDescEditor').innerText.trim(),
+            header_image_url: sanitizeUrl(document.getElementById('formHeaderImage').value),
             fields: fields
         };
         document.getElementById('schemaInput').value = JSON.stringify(schema);
