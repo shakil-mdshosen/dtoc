@@ -140,7 +140,15 @@ def export_excel(form_id):
             if 'data' in data:
                 data = data['data']
             row = [sub.id, sub.submitted_at.isoformat(), sub.submitted_by]
-            row.extend([data.get(h, '') for h in field_headers])
+            
+            for h in field_headers:
+                val = data.get(h, '')
+                if isinstance(val, list):
+                    val = ', '.join(map(str, val))
+                elif isinstance(val, dict):
+                    val = json.dumps(val)
+                row.append(val)
+                
             ws.append(row)
 
         # Auto-fit column widths (materialise the column into a list to avoid double-iteration)
