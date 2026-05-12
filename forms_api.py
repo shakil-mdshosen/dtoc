@@ -152,6 +152,12 @@ def escape_like_pattern(value):
     return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
 
 
+def is_owner_user(username):
+    owner_username = (current_app.config.get('OWNER_USERNAME') or '').strip()
+    current_user = (username or '').strip()
+    return bool(owner_username) and current_user.casefold() == owner_username.casefold()
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -165,9 +171,7 @@ def login_required(f):
 def owner_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        owner_username = (current_app.config.get('OWNER_USERNAME') or '').strip()
-        current_user = (session.get('username') or '').strip()
-        if not owner_username or current_user.casefold() != owner_username.casefold():
+        if not is_owner_user(session.get('username')):
             flash("You don't have permission to access the owner dashboard.", "danger")
             return redirect(url_for('forms.dashboard'))
         return f(*args, **kwargs)

@@ -9,7 +9,7 @@ def create_app(config_class=Config):
     db.init_app(app)
 
     from auth import auth_bp
-    from forms_api import forms_bp
+    from forms_api import forms_bp, is_owner_user
     from export import export_bp
 
     app.register_blueprint(auth_bp)
@@ -22,10 +22,7 @@ def create_app(config_class=Config):
 
     @app.context_processor
     def inject_owner_flag():
-        owner_username = (app.config.get('OWNER_USERNAME') or '').strip()
-        current_user = (session.get('username') or '').strip()
-        is_owner = bool(owner_username) and current_user.casefold() == owner_username.casefold()
-        return {'is_owner': is_owner}
+        return {'is_owner': is_owner_user(session.get('username'))}
 
     with app.app_context():
         db.create_all()
