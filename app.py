@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, session
 from config import Config
 from models import db
 
@@ -19,6 +19,13 @@ def create_app(config_class=Config):
     @app.route('/')
     def home():
         return render_template('home.html')
+
+    @app.context_processor
+    def inject_owner_flag():
+        owner_username = (app.config.get('OWNER_USERNAME') or '').strip()
+        current_user = (session.get('username') or '').strip()
+        is_owner = bool(owner_username) and current_user.casefold() == owner_username.casefold()
+        return {'is_owner': is_owner}
 
     with app.app_context():
         db.create_all()

@@ -1,6 +1,5 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, flash
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, flash, current_app
 from models import db, Form, Submission, Permission, AuditLog
-from config import Config
 import json
 import base64
 import binascii
@@ -166,7 +165,7 @@ def login_required(f):
 def owner_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        owner_username = (Config.OWNER_USERNAME or '').strip()
+        owner_username = (current_app.config.get('OWNER_USERNAME') or '').strip()
         current_user = (session.get('username') or '').strip()
         if not owner_username or current_user.casefold() != owner_username.casefold():
             flash("You don't have permission to access the owner dashboard.", "danger")
