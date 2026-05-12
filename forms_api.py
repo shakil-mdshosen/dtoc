@@ -253,9 +253,11 @@ def owner_dashboard():
     )
 
     if creator_filter:
-        query = query.filter(Form.created_by.ilike(f'%{creator_filter}%'))
+        creator_pattern = '%' + creator_filter + '%'
+        query = query.filter(Form.created_by.ilike(creator_pattern))
     if title_filter:
-        query = query.filter(Form.title.ilike(f'%{title_filter}%'))
+        title_pattern = '%' + title_filter + '%'
+        query = query.filter(Form.title.ilike(title_pattern))
     if status_filter == 'active':
         query = query.filter(Form.is_active.is_(True))
     elif status_filter == 'closed':
