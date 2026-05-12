@@ -59,7 +59,8 @@ def view_form(form_id):
         db.session.commit()
         return jsonify({"status": "success", "message": "Submission received"}), 201
         
-    return render_template('form_view.html', form=form)
+    permissions = Permission.query.filter_by(form_id=form.id).all()
+    return render_template('form_view.html', form=form, permissions=permissions)
 
 @forms_bp.route('/dashboard')
 @login_required
