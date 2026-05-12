@@ -56,39 +56,69 @@
         </div>
         
         <!-- Disclaimer & Transparency Card -->
-        <div class="gf-card p-5 sm:p-8 border-l-4 border-yellow-400 bg-yellow-50">
-            <h2 class="text-base font-semibold text-yellow-800 mb-3 flex items-center gap-2">
-                <span class="material-icons text-yellow-600" style="font-size:20px;">info</span>
-                Notice &amp; Disclaimer
-            </h2>
-            <ul class="text-sm text-yellow-900 space-y-2 list-disc list-inside">
-                <li>
-                    <strong>Data retention:</strong> All responses submitted through this form will be stored for
-                    <strong>90 days after the form is closed</strong>, after which they will be permanently deleted.
-                </li>
-                <li>
-                    <strong>Purpose:</strong> This form is intended <strong>solely for Wikimedia project-related purposes</strong>.
-                    Please do not use it for any other purpose.
-                </li>
-            </ul>
+        <div class="gf-card overflow-hidden">
+            <!-- Header bar -->
+            <div class="flex items-center gap-3 px-5 sm:px-8 py-4 bg-gradient-to-r from-slate-700 to-slate-800">
+                <span class="material-icons text-white opacity-90" style="font-size:22px;">verified_user</span>
+                <h2 class="text-sm font-semibold text-white tracking-wide uppercase">Notice &amp; Disclaimer</h2>
+            </div>
 
-            <div class="mt-4 pt-4 border-t border-yellow-300">
-                <p class="text-sm font-semibold text-yellow-800 mb-2">Form Access &amp; Transparency</p>
-                <p class="text-sm text-yellow-900">
-                    <strong>Creator:</strong>
-                    <span class="font-medium">{{ form.created_by }}</span>
-                </p>
+            <div class="px-5 sm:px-8 py-5 bg-slate-50 grid gap-3 sm:grid-cols-2">
+                <!-- Data Retention -->
+                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
+                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">schedule</span>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Data Retention</p>
+                        <p class="text-sm text-slate-700">Responses are stored for <strong>90 days after the form is closed</strong>, then permanently deleted in line with Wikimedia data-minimization principles.</p>
+                    </div>
+                </div>
+
+                <!-- Intended Use -->
+                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
+                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">policy</span>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Intended Use</p>
+                        <p class="text-sm text-slate-700">This form is for <strong>Wikimedia project-related purposes only</strong>. Submissions for unrelated purposes will be removed.</p>
+                    </div>
+                </div>
+
+                <!-- Access Control -->
+                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
+                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">manage_accounts</span>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Form Creator</p>
+                        <p class="text-sm text-slate-700">
+                            Created by
+                            <span class="inline-flex items-center gap-1 mt-1">
+                                <span class="bg-slate-100 text-slate-800 text-xs font-medium px-2 py-0.5 rounded-full border border-slate-200">{{ form.created_by }}</span>
+                            </span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Who Has Access -->
                 {% if permissions %}
-                <p class="text-sm text-yellow-900 mt-1"><strong>Users with access:</strong></p>
-                <ul class="text-sm text-yellow-900 list-disc list-inside mt-1 space-y-1">
-                    {% for perm in permissions %}
-                    <li>
-                        <span class="font-medium">{{ perm.username }}</span>
-                        <span class="text-yellow-700">({{ perm.role }})</span>
-                    </li>
-                    {% endfor %}
-                </ul>
+                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
+                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">group</span>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Users with Access</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            {% for perm in permissions %}
+                            <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border
+                                {% if perm.role == 'admin' %}bg-purple-50 text-purple-700 border-purple-200
+                                {% else %}bg-green-50 text-green-700 border-green-200{% endif %}">
+                                {{ perm.username }}
+                                <span class="opacity-60">&middot; {{ perm.role }}</span>
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
                 {% endif %}
+            </div>
+
+            <div class="px-5 sm:px-8 py-3 bg-slate-100 border-t border-slate-200">
+                <p class="text-xs text-slate-400">Your response is associated with your Wikimedia account. For questions, contact the form creator.</p>
             </div>
         </div>
 
