@@ -2,8 +2,119 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from models import db, Form, Submission, Permission, AuditLog
 import json
 from functools import wraps
+from html import escape
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 
 forms_bp = Blueprint('forms', __name__)
+
+ALLOWED_DESCRIPTION_TAGS = {
+    'b', 'strong', 'i', 'em', 'u', 's', 'strike',
+    'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a'
+}
+
+
+class DescriptionHTMLSanitizer(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag not in ALLOWED_DESCRIPTION_TAGS:
+            return
+        if tag == 'a':
+            href = dict(attrs).get('href', '')
+            safe_href = sanitize_link_url(href)
+            if safe_href:
+                self.parts.append(
+                    f'<a href="{escape(safe_href, quote=True)}" target="_blank" rel="noopener noreferrer nofollow">'
+                )
+                return
+            self.parts.append('<a>')
+            return
+        self.parts.append(f'<{tag}>')
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in ALLOWED_DESCRIPTION_TAGS and tag != 'br':
+            self.parts.append(f'</{tag}>')
+
+    def handle_data(self, data):
+        self.parts.append(escape(data))
+
+    def get_html(self):
+        return ''.join(self.parts).strip()
+
+
+class PlainTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+    def get_text(self):
+        return ''.join(self.parts).strip()
+
+
+def sanitize_link_url(url):
+    if not isinstance(url, str):
+        return ''
+    value = url.strip()
+    if not value:
+        return ''
+    parsed = urlparse(value)
+    if parsed.scheme.lower() in {'http', 'https', 'mailto'}:
+        return value
+    return ''
+
+
+def sanitize_header_image_url(url):
+    if not isinstance(url, str):
+        return ''
+    value = url.strip()
+    if not value:
+        return ''
+    parsed = urlparse(value)
+    if parsed.scheme.lower() in {'http', 'https'} and parsed.netloc:
+        return value
+    return ''
+
+
+def sanitize_description_html(raw_html):
+    if not isinstance(raw_html, str):
+        return ''
+    sanitizer = DescriptionHTMLSanitizer()
+    sanitizer.feed(raw_html)
+    sanitizer.close()
+    return sanitizer.get_html()
+
+
+def to_plain_text(raw_html):
+    if not isinstance(raw_html, str):
+        return ''
+    extractor = PlainTextExtractor()
+    extractor.feed(raw_html)
+    extractor.close()
+    return extractor.get_text()
+
+
+def sanitize_schema(raw_schema):
+    if not isinstance(raw_schema, dict):
+        raw_schema = {}
+    schema = dict(raw_schema)
+    raw_description = schema.get('description_html') or schema.get('description') or ''
+    description_html = sanitize_description_html(raw_description)
+    schema['description_html'] = description_html
+    schema['description'] = to_plain_text(description_html)
+    header_image_url = sanitize_header_image_url(schema.get('header_image_url', ''))
+    if header_image_url:
+        schema['header_image_url'] = header_image_url
+    else:
+        schema.pop('header_image_url', None)
+    return schema
 
 def login_required(f):
     @wraps(f)
@@ -20,8 +131,14 @@ def builder():
     if request.method == 'POST':
         title = request.form.get('title')
         schema = request.form.get('schema')
+        try:
+            parsed_schema = json.loads(schema) if schema else {}
+        except json.JSONDecodeError:
+            flash("Invalid form data. Please try again.", "danger")
+            return render_template('builder.html'), 400
+        clean_schema = sanitize_schema(parsed_schema)
         
-        new_form = Form(title=title, schema=schema, created_by=session['username'])
+        new_form = Form(title=title, schema=json.dumps(clean_schema), created_by=session['username'])
         db.session.add(new_form)
         db.session.commit()
         

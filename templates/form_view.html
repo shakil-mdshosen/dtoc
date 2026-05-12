@@ -37,6 +37,14 @@
         height: 20px;
         accent-color: #673ab7;
     }
+    .description-html p,
+    .description-html div {
+        margin: 0.25rem 0;
+    }
+    .description-html ul,
+    .description-html ol {
+        margin: 0.5rem 0 0.5rem 1.25rem;
+    }
 </style>
 {% endblock %}
 
@@ -45,8 +53,11 @@
     <form id="submissionForm" onsubmit="submitForm(event)">
         <!-- Header Card -->
         <div class="gf-card gf-top-card p-5 sm:p-8" id="headerCard">
+            <div id="headerImageWrapper" class="hidden mb-5">
+                <img id="headerImage" alt="Form header image" class="w-full max-h-72 object-cover rounded-lg border border-gray-200">
+            </div>
             <h1 class="text-2xl sm:text-3xl font-normal text-gray-900 mb-2">{{ form.title }}</h1>
-            <p id="formDesc" class="text-gray-600 text-sm whitespace-pre-wrap"></p>
+            <div id="formDesc" class="description-html text-gray-600 text-sm"></div>
             <div class="mt-4 pt-4 border-t border-gray-200">
                 <p class="text-sm text-gray-500">
                     Logged in as <span class="font-medium text-gray-800">{{ session.username }}</span> (<a href="{{ url_for('auth.logout') }}" class="text-blue-600 hover:underline">Switch account</a>)
@@ -138,12 +149,69 @@
 <script>
     const schema = {{ form.schema | safe }};
     const container = document.getElementById('fieldsContainer');
+    const ALLOWED_DESC_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a']);
 
-    // Display description if available
-    if (schema.description) {
-        document.getElementById('formDesc').textContent = schema.description;
+    function sanitizeUrl(url, allowMailTo = false) {
+        if (!url) return '';
+        const trimmed = String(url).trim();
+        try {
+            const parsed = new URL(trimmed);
+            const protocols = allowMailTo ? ['http:', 'https:', 'mailto:'] : ['http:', 'https:'];
+            return protocols.includes(parsed.protocol) ? trimmed : '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function sanitizeDescriptionHtml(html) {
+        const template = document.createElement('template');
+        template.innerHTML = html || '';
+
+        const sanitizeNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) return;
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                node.remove();
+                return;
+            }
+
+            const tagName = node.tagName.toLowerCase();
+            [...node.childNodes].forEach(sanitizeNode);
+            if (!ALLOWED_DESC_TAGS.has(tagName)) {
+                const fragment = document.createDocumentFragment();
+                while (node.firstChild) fragment.appendChild(node.firstChild);
+                node.replaceWith(fragment);
+                return;
+            }
+
+            const originalHref = tagName === 'a' ? node.getAttribute('href') : '';
+            [...node.attributes].forEach(attr => node.removeAttribute(attr.name));
+            if (tagName === 'a') {
+                const href = sanitizeUrl(originalHref, true);
+                if (href) {
+                    node.setAttribute('href', href);
+                    node.setAttribute('target', '_blank');
+                    node.setAttribute('rel', 'noopener noreferrer nofollow');
+                }
+            }
+
+        };
+
+        [...template.content.childNodes].forEach(sanitizeNode);
+        return template.innerHTML.trim();
+    }
+
+    const descriptionHtml = sanitizeDescriptionHtml(schema.description_html || schema.description || '');
+    if (descriptionHtml) {
+        document.getElementById('formDesc').innerHTML = descriptionHtml;
     } else {
         document.getElementById('formDesc').style.display = 'none';
+    }
+
+    const headerImageUrl = sanitizeUrl(schema.header_image_url);
+    if (headerImageUrl) {
+        const image = document.getElementById('headerImage');
+        image.src = headerImageUrl;
+        document.getElementById('headerImageWrapper').classList.remove('hidden');
     }
 
     const fields = schema.fields || [];
