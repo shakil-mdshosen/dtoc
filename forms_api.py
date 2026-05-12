@@ -75,7 +75,10 @@ def sanitize_link_url(url):
     if not value:
         return ''
     parsed = urlparse(value)
-    if parsed.scheme.lower() in {'http', 'https', 'mailto'}:
+    scheme = parsed.scheme.lower()
+    if scheme in {'http', 'https'} and parsed.netloc:
+        return value
+    if scheme == 'mailto' and parsed.path:
         return value
     return ''
 
