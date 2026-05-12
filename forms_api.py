@@ -148,6 +148,11 @@ def sanitize_schema(raw_schema):
         schema.pop('header_image_url', None)
     return schema
 
+
+def escape_like_pattern(value):
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -253,11 +258,11 @@ def owner_dashboard():
     )
 
     if creator_filter:
-        creator_pattern = '%' + creator_filter + '%'
-        query = query.filter(Form.created_by.ilike(creator_pattern))
+        creator_pattern = '%' + escape_like_pattern(creator_filter) + '%'
+        query = query.filter(Form.created_by.ilike(creator_pattern, escape='\\'))
     if title_filter:
-        title_pattern = '%' + title_filter + '%'
-        query = query.filter(Form.title.ilike(title_pattern))
+        title_pattern = '%' + escape_like_pattern(title_filter) + '%'
+        query = query.filter(Form.title.ilike(title_pattern, escape='\\'))
     if status_filter == 'active':
         query = query.filter(Form.is_active.is_(True))
     elif status_filter == 'closed':

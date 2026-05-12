@@ -45,7 +45,7 @@ def seed_forms():
         schema='{}',
         created_by='AnotherUser',
         is_active=False,
-        closed_at=datetime.now(timezone.utc) - timedelta(days=2)
+        closed_at=datetime.now(tz=timezone.utc) - timedelta(days=2)
     )
     db.session.add_all([active_form, closed_form])
     db.session.commit()
