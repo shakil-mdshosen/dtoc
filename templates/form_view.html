@@ -155,7 +155,7 @@
         if (!url) return '';
         const trimmed = String(url).trim();
         if (allowDataImage) {
-            const dataMatch = trimmed.match(/^data:(image\/(?:png|jpeg|jpg|gif|webp));base64,([A-Za-z0-9+/=]+)$/i);
+            const dataMatch = trimmed.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/i);
             if (dataMatch) return trimmed;
         }
         try {

@@ -90,8 +90,8 @@
             <input type="text" name="title" id="formTitle" placeholder="Untitled form" required class="gf-input-title w-full mb-4">
             <input type="url" id="formHeaderImage" placeholder="Header image URL (https://...)" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300 mb-2" oninput="handleHeaderImageUrlInput()">
             <div class="mb-4">
-                <label for="formHeaderImageFile" class="block text-sm text-gray-600 mb-1">Or upload header image (PNG, JPG, GIF, WEBP · max 2 MB)</label>
-                <input type="file" id="formHeaderImageFile" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="w-full text-sm text-gray-600" onchange="handleHeaderImageUpload(event)">
+                <label for="formHeaderImageFile" class="block text-sm text-gray-600 mb-1">Or upload header image (PNG, JPEG, GIF, WEBP · max 2 MB)</label>
+                <input type="file" id="formHeaderImageFile" accept="image/png,image/jpeg,image/gif,image/webp" class="w-full text-sm text-gray-600" onchange="handleHeaderImageUpload(event)">
             </div>
             <div class="flex flex-wrap items-center gap-2 mb-2" onclick="event.stopPropagation()">
                 <button type="button" class="toolbar-btn" onclick="formatDescription('bold')" title="Bold"><span class="material-icons text-base">format_bold</span></button>
@@ -129,7 +129,7 @@
     let fields = [];
     let uploadedHeaderImageDataUrl = '';
     const HEADER_IMAGE_MAX_SIZE_BYTES = 2 * 1024 * 1024;
-    const ALLOWED_HEADER_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']);
+    const ALLOWED_HEADER_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
     const ALLOWED_DESC_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a']);
     
     function generateId() {
@@ -284,7 +284,7 @@
         }
 
         if (!ALLOWED_HEADER_MIME_TYPES.has(file.type)) {
-            alert('Please upload a PNG, JPG, GIF, or WEBP image.');
+            alert('Please upload a PNG, JPEG, GIF, or WEBP image.');
             fileInput.value = '';
             uploadedHeaderImageDataUrl = '';
             updateHeaderPreview();
