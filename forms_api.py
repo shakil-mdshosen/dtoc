@@ -18,10 +18,16 @@ class DescriptionHTMLSanitizer(HTMLParser):
     def __init__(self):
         super().__init__()
         self.parts = []
+        self.open_tags = []
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         if tag not in ALLOWED_DESCRIPTION_TAGS:
+            self.open_tags.append(None)
+            return
+        if tag == 'br':
+            self.parts.append('<br>')
+            self.open_tags.append(None)
             return
         if tag == 'a':
             href = dict(attrs).get('href', '')
@@ -30,14 +36,17 @@ class DescriptionHTMLSanitizer(HTMLParser):
                 self.parts.append(
                     f'<a href="{escape(safe_href, quote=True)}" target="_blank" rel="noopener noreferrer nofollow">'
                 )
+                self.open_tags.append('a')
                 return
-            self.parts.append('<a>')
+            self.open_tags.append(None)
             return
         self.parts.append(f'<{tag}>')
+        self.open_tags.append(tag)
 
     def handle_endtag(self, tag):
         tag = tag.lower()
-        if tag in ALLOWED_DESCRIPTION_TAGS and tag != 'br':
+        opened = self.open_tags.pop() if self.open_tags else None
+        if opened == tag and tag != 'br':
             self.parts.append(f'</{tag}>')
 
     def handle_data(self, data):
