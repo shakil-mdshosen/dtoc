@@ -151,9 +151,13 @@
     const container = document.getElementById('fieldsContainer');
     const ALLOWED_DESC_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a']);
 
-    function sanitizeUrl(url, allowMailTo = false) {
+    function sanitizeUrl(url, allowMailTo = false, allowDataImage = false) {
         if (!url) return '';
         const trimmed = String(url).trim();
+        if (allowDataImage) {
+            const dataMatch = trimmed.match(/^data:(image\/(?:png|jpeg|jpg|gif|webp));base64,([A-Za-z0-9+/=]+)$/i);
+            if (dataMatch) return trimmed;
+        }
         try {
             const parsed = new URL(trimmed);
             const protocols = allowMailTo ? ['http:', 'https:', 'mailto:'] : ['http:', 'https:'];
@@ -207,7 +211,7 @@
         document.getElementById('formDesc').style.display = 'none';
     }
 
-    const headerImageUrl = sanitizeUrl(schema.header_image_url);
+    const headerImageUrl = sanitizeUrl(schema.header_image_url, false, true);
     if (headerImageUrl) {
         const image = document.getElementById('headerImage');
         image.src = headerImageUrl;
