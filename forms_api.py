@@ -208,6 +208,38 @@ def builder():
         
     return render_template('builder.html')
 
+@forms_bp.route('/form/<int:form_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_form(form_id):
+    form = Form.query.get_or_404(form_id)
+    perm = Permission.query.filter_by(form_id=form.id, username=session['username'], role='admin').first()
+    if not perm:
+        flash("You don't have permission to edit this form.", "danger")
+        return redirect(url_for('forms.dashboard'))
+        
+    if request.method == 'POST':
+        title = request.form.get('title')
+        schema = request.form.get('schema')
+        try:
+            parsed_schema = json.loads(schema) if schema else {}
+        except json.JSONDecodeError:
+            flash("Invalid form data. Please try again.", "danger")
+            return render_template('builder.html', existing_form=form, schema_json=form.schema), 400
+            
+        clean_schema = sanitize_schema(parsed_schema)
+        
+        form.title = title
+        form.schema = json.dumps(clean_schema)
+        
+        log = AuditLog(action='EDIT_FORM', details=f"Form {form.id} edited by {session['username']}")
+        db.session.add(log)
+        db.session.commit()
+        
+        flash("Form updated successfully!", "success")
+        return redirect(url_for('forms.dashboard'))
+        
+    return render_template('builder.html', existing_form=form, schema_json=form.schema)
+
 @forms_bp.route('/form/<int:form_id>', methods=['GET', 'POST'])
 @login_required
 def view_form(form_id):
@@ -283,6 +315,7 @@ def owner_dashboard():
             'closed_at': form.closed_at,
             'total_responses': total_responses,
             'form_url': url_for('forms.view_form', form_id=form.id, _external=True),
+            'form_id': form.id,
         }
         for form, total_responses in records
     ]

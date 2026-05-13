@@ -38,6 +38,7 @@
                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Creation Date</th>
                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Closing Date</th>
                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Total Responses</th>
+                <th class="px-4 py-3 text-left font-semibold text-gray-700">Actions</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
@@ -54,10 +55,13 @@
                     {% endif %}
                 </td>
                 <td class="px-4 py-3">{{ row.total_responses }}</td>
+                <td class="px-4 py-3">
+                    <a href="{{ url_for('forms.edit_form', form_id=row.form_id) }}" class="text-orange-600 hover:text-orange-800 text-sm font-medium">Edit</a>
+                </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" class="px-4 py-6 text-gray-500 italic text-center">No forms found for the selected filters.</td>
+                <td colspan="6" class="px-4 py-6 text-gray-500 italic text-center">No forms found for the selected filters.</td>
             </tr>
             {% endfor %}
         </tbody>

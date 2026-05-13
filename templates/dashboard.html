@@ -27,6 +27,9 @@
                 </div>
                 <div class="w-full sm:w-auto flex-shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:justify-end">
                     <a href="{{ url_for('forms.view_form', form_id=form.id) }}" class="text-center text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-2 rounded">View Form</a>
+                    {% if roles[form.id] == 'admin' %}
+                    <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="text-center text-orange-600 hover:text-orange-900 bg-orange-50 px-3 py-2 rounded">Edit Form</a>
+                    {% endif %}
                     <a href="{{ url_for('forms.view_submissions', form_id=form.id) }}" class="text-center text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-2 rounded">Submissions</a>
                     <a href="{{ url_for('export.export_csv', form_id=form.id) }}" class="text-center text-green-600 hover:text-green-900 bg-green-50 px-3 py-2 rounded">Export CSV</a>
                     <a href="{{ url_for('export.export_json', form_id=form.id) }}" class="text-center text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-3 py-2 rounded">Export JSON</a>

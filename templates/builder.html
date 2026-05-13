@@ -81,7 +81,7 @@
 
 {% block content %}
 <div class="w-full max-w-3xl mx-auto py-4 sm:py-8 px-2 sm:px-0">
-    <form method="POST" action="{{ url_for('forms.builder') }}" id="builderForm">
+    <form method="POST" action="{% if existing_form %}{{ url_for('forms.edit_form', form_id=existing_form.id) }}{% else %}{{ url_for('forms.builder') }}{% endif %}" id="builderForm">
         <!-- Title Card -->
         <div class="gf-card gf-top-card p-5 sm:p-8" onclick="setActive(this)">
             <div id="headerImagePreviewWrapper" class="hidden mb-5">
@@ -119,7 +119,7 @@
             </button>
             
             <button type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-6 rounded-md shadow">
-                Save Form
+                {% if existing_form %}Save Changes{% else %}Save Form{% endif %}
             </button>
         </div>
     </form>
@@ -430,7 +430,41 @@
         document.getElementById('schemaInput').value = JSON.stringify(schema);
     };
 
+    // Initialization
+    {% if schema_json %}
+    try {
+        const schema = JSON.parse({{ schema_json | tojson | safe }});
+        if (schema.fields && schema.fields.length > 0) {
+            fields = schema.fields;
+        } else {
+            addField();
+        }
+        
+        // Populate Title
+        const titleInput = document.getElementById('formTitle');
+        {% if existing_form %}
+        titleInput.value = {{ existing_form.title | tojson | safe }};
+        {% endif %}
+        
+        // Populate Description HTML
+        if (schema.description_html) {
+            document.getElementById('formDescEditor').innerHTML = schema.description_html;
+        }
+        
+        // Populate Header Image
+        if (schema.header_image_url) {
+            uploadedHeaderImageDataUrl = schema.header_image_url;
+            updateHeaderPreview();
+        }
+        
+        renderFields();
+    } catch (e) {
+        console.error("Error loading existing schema", e);
+        addField();
+    }
+    {% else %}
     // Add first field by default
     addField();
+    {% endif %}
 </script>
 {% endblock %}
