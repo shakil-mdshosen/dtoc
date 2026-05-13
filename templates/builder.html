@@ -308,7 +308,7 @@
                 let height = img.height;
                 
                 // Max dimensions for header image
-                const MAX_WIDTH = 1200;
+                const MAX_WIDTH = 800;
                 
                 if (width > MAX_WIDTH) {
                     height = Math.round((height * MAX_WIDTH) / width);
@@ -320,8 +320,8 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Compress as jpeg with 0.6 quality to ensure it fits well under 1MB payload limits
-                uploadedHeaderImageDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                // Compress as jpeg with 0.5 quality to ensure it fits well under 1MB payload limits
+                uploadedHeaderImageDataUrl = canvas.toDataURL('image/jpeg', 0.5);
                 
                 document.getElementById('formHeaderImage').value = '';
                 updateHeaderPreview();
