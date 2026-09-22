@@ -8,10 +8,21 @@ The **DTOC (Data Retention & Form Collection)** tool is a modernized, mobile-res
 - **Wikimedia OAuth Integration:** All access to the application—from creating forms to simply viewing and submitting responses—is protected by Wikimedia OAuth. Anonymous submissions are disabled.
 - **Identity Logging:** The identity of the submitter is always logged securely with their response, ensuring accountability and preventing spam.
 
-### 2. Advanced Form Builder
-- **Rich Media & Formatting:** Forms support rich-text descriptions (bold, italics, links) and custom Base64 Header Images to personalize the user experience.
-- **Multiple Input Types:** Choose from Short Answer, Paragraph, Multiple Choice, Checkboxes, Dropdowns, and Date Pickers.
-- **Material Design UI:** The builder and viewer utilize a beautiful, mobile-first Google Forms-style aesthetic built with Tailwind CSS.
+### 2. Survey Builder (LimeSurvey-style)
+- **19 question types:** Short answer, Paragraph, Email, Number, Phone, Website/URL, Date, Time, Multiple choice, Checkboxes, Dropdown, Yes/No, Linear scale, Star rating, Net Promoter Score, Matrix/Likert grid, Ranking, plus Section (page break) and Text block layout items.
+- **Multi-page surveys:** Sections split a form into pages with Back/Next navigation and a progress bar.
+- **Conditional logic:** Show a question or an entire section only when an earlier answer *is / is not / contains / is greater than / is less than / is (not) answered*.
+- **Validation:** Required answers, min/max length, number ranges, min/max selections, "Other" options, option shuffling. All rules are enforced on the server as well as in the browser.
+- **Form settings:** Theme colour, one response per account, response limit, scheduled auto-close, custom confirmation message, question numbering.
+- **Builder UX:** Question palette, drag-and-drop reordering, duplicate/move/delete, paste multiple lines to create options, live preview, `Ctrl+S` to save, and ready-made templates (event registration, feedback survey, scholarship application, community consultation, volunteer sign-up).
+- **Respondent UX:** Answers autosave in the browser so a refresh doesn't lose progress; errors are shown inline next to the question.
+- **Rich media:** Rich-text description and header image (upload is compressed client-side).
+- **Modern, privacy-friendly UI:** Self-hosted CSS and SVG icons (no CDN or Google Fonts requests, in line with the Toolforge privacy policy), dark mode, and mobile-first layouts.
+
+### Results & Analytics
+- Summary charts per question (choice counts, averages, NPS, matrix tables, average rank, latest text answers) and a responses-over-time chart.
+- Searchable response table with a per-response detail view.
+- Dashboard with response counts, search, status filters, share links, duplicate and delete.
 
 ### 3. Collaboration & Access Control
 - **Granular Permissions:** Form creators can add other Wikimedia users as "Collaborators", allowing them to view and manage submissions.
@@ -29,7 +40,7 @@ Form administrators can export their collected data in three highly structured f
 
 - **Backend:** Python 3, Flask
 - **Database:** MariaDB (via Toolforge `replica.my.cnf`), SQLAlchemy ORM
-- **Frontend:** HTML5, Vanilla JavaScript, Tailwind CSS (CDN)
+- **Frontend:** HTML5, Vanilla JavaScript, self-hosted CSS design system (`static/css/app.css`)
 - **Authentication:** `mwoauth`, `requests-oauthlib`
 
 ---

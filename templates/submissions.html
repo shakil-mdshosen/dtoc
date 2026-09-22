@@ -1,181 +1,298 @@
 {% extends 'base.html' %}
+{% block title %}Results · {{ form.title }}{% endblock %}
 
 {% block content %}
-<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-    <div class="px-4 sm:px-6 py-5 border-b border-gray-200 bg-gray-50 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800">{{ form.title }} - Submissions</h2>
-            <p class="text-sm text-gray-500 mt-1">Total: {{ submissions|length }} responses</p>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 sm:gap-3 w-full sm:w-auto">
-            <a href="{{ url_for('export.export_csv', form_id=form.id) }}" class="px-4 py-2 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm font-medium hover:bg-green-100">Export CSV</a>
-            <a href="{{ url_for('export.export_excel', form_id=form.id) }}" class="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-md text-sm font-medium hover:bg-emerald-100">Export Excel</a>
-            <a href="{{ url_for('export.export_json', form_id=form.id) }}" class="px-4 py-2 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-md text-sm font-medium hover:bg-yellow-100">Export JSON</a>
-            {% if is_admin %}
-            <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="px-4 py-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-md text-sm font-medium hover:bg-orange-100">Edit Form</a>
-            {% endif %}
-            <a href="{{ url_for('forms.dashboard') }}" class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Back to Dashboard</a>
-        </div>
+<div class="page-header">
+    <div style="min-width:0">
+        <a href="{{ url_for('forms.dashboard') }}" class="small"><svg class="icon icon-sm"><use href="#i-left"></use></svg> My forms</a>
+        <h1 style="margin-top:6px;word-break:break-word">{{ form.title }}</h1>
+        <p class="row row-wrap" style="gap:8px">
+            {% if form.is_active %}<span class="badge badge-success">Accepting responses</span>{% else %}<span class="badge badge-danger">Closed</span>{% endif %}
+            <span>Created {{ form.created_at.strftime('%d %b %Y') }} by {{ form.created_by }}</span>
+        </p>
     </div>
-
-    {% if is_admin %}
-    <!-- Collaborator Management Section -->
-    <div class="px-4 sm:px-6 py-5 border-b border-gray-200">
-        <h3 class="text-lg font-medium text-gray-800 mb-4">Collaborators</h3>
-        
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:space-x-4 mb-4">
-            <input type="text" id="collaborator-username" placeholder="Wikimedia Username" class="flex-1 px-4 py-2.5 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-            <button onclick="addCollaborator()" class="px-4 py-2.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700">Add User</button>
-        </div>
-
-        <ul class="divide-y divide-gray-200 border border-gray-200 rounded-md">
-            {% for perm in collaborators %}
-            <li class="px-4 py-3 flex justify-between items-center" id="collab-{{ perm.username }}">
-                <div class="flex items-center">
-                    <span class="font-medium text-gray-900">{{ perm.username }}</span>
-                    <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if perm.role == 'admin' %}bg-purple-100 text-purple-800{% else %}bg-green-100 text-green-800{% endif %}">
-                        {{ perm.role|title }}
-                    </span>
-                </div>
-                {% if perm.role != 'admin' %}
-                <button onclick="removeCollaborator('{{ perm.username }}')" class="text-red-600 hover:text-red-900 text-sm font-medium">Remove</button>
-                {% endif %}
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-    {% endif %}
-
-    <!-- Submissions Table -->
-    <div class="md:hidden divide-y divide-gray-200">
-        {% for sub in submissions %}
-        <div class="p-4 space-y-3" id="m-sub-{{ sub.id }}">
-            <div class="text-xs text-gray-500">{{ sub.submitted_at.strftime('%Y-%m-%d %H:%M') }}</div>
-            <div class="text-sm font-medium text-gray-900">{{ sub.submitted_by or 'Anonymous' }}</div>
-            <div class="text-sm">
-                <button onclick="toggleData('m-data-{{ sub.id }}')" class="text-blue-600 hover:text-blue-900 underline">View JSON</button>
-                <pre id="m-data-{{ sub.id }}" class="hidden mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">{{ sub.data }}</pre>
+    <div class="spacer"></div>
+    <div class="row row-wrap">
+        <button type="button" class="btn btn-ghost" data-copy="{{ url_for('forms.view_form', form_id=form.id, _external=True) }}"><svg class="icon icon-sm"><use href="#i-link"></use></svg>Copy link</button>
+        <a href="{{ url_for('forms.view_form', form_id=form.id) }}" target="_blank" rel="noopener" class="btn btn-ghost"><svg class="icon icon-sm"><use href="#i-eye"></use></svg>Open</a>
+        {% if is_admin %}
+        <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="btn"><svg class="icon icon-sm"><use href="#i-edit"></use></svg>Edit form</a>
+        {% endif %}
+        <details class="menu">
+            <summary class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-download"></use></svg>Export<svg class="icon icon-sm"><use href="#i-down"></use></svg></summary>
+            <div class="menu-panel">
+                <a class="menu-item" href="{{ url_for('export.export_csv', form_id=form.id) }}"><svg class="icon icon-sm"><use href="#i-file"></use></svg>CSV (.csv)</a>
+                <a class="menu-item" href="{{ url_for('export.export_excel', form_id=form.id) }}"><svg class="icon icon-sm"><use href="#i-table"></use></svg>Excel (.xlsx)</a>
+                <a class="menu-item" href="{{ url_for('export.export_json', form_id=form.id) }}"><svg class="icon icon-sm"><use href="#i-hash"></use></svg>JSON (.json)</a>
             </div>
-            <div>
-                <button onclick="deleteSubmission({{ sub.id }})" class="text-red-600 hover:text-red-900 text-sm font-medium">Delete</button>
-            </div>
-        </div>
-        {% else %}
-        <div class="px-6 py-4 text-center text-sm text-gray-500">No submissions yet.</div>
-        {% endfor %}
-    </div>
-
-    <div class="hidden md:block overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted By</th>
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Response Data</th>
-                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for sub in submissions %}
-                <tr id="sub-{{ sub.id }}">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {{ sub.submitted_at.strftime('%Y-%m-%d %H:%M') }}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {{ sub.submitted_by or 'Anonymous' }}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-500">
-                        <button onclick="toggleData('data-{{ sub.id }}')" class="text-blue-600 hover:text-blue-900 underline">View JSON</button>
-                        <pre id="data-{{ sub.id }}" class="hidden mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">{{ sub.data }}</pre>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button onclick="deleteSubmission({{ sub.id }})" class="text-red-600 hover:text-red-900">Delete</button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">
-                        No submissions yet.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        </details>
     </div>
 </div>
 
+<div class="stats">
+    <div class="card stat"><div class="stat-icon"><svg class="icon"><use href="#i-inbox"></use></svg></div><div><div class="stat-value">{{ submissions|length }}</div><div class="stat-label">Responses</div></div></div>
+    <div class="card stat"><div class="stat-icon blue"><svg class="icon"><use href="#i-list"></use></svg></div><div><div class="stat-value">{{ question_count }}</div><div class="stat-label">Questions</div></div></div>
+    <div class="card stat"><div class="stat-icon green"><svg class="icon"><use href="#i-users"></use></svg></div><div><div class="stat-value">{{ submissions|map(attribute='submitted_by')|unique|list|length }}</div><div class="stat-label">Unique respondents</div></div></div>
+    <div class="card stat"><div class="stat-icon amber"><svg class="icon"><use href="#i-clock"></use></svg></div><div><div class="stat-value" style="font-size:17px">{% if submissions %}{{ submissions[0].submitted_at.strftime('%d %b, %H:%M') }}{% else %}—{% endif %}</div><div class="stat-label">Latest response (UTC)</div></div></div>
+</div>
+
+<div class="tabs" role="tablist" style="margin-bottom:18px">
+    <button type="button" class="tab" role="tab" aria-selected="true" data-tab="summary"><svg class="icon icon-sm"><use href="#i-chart"></use></svg>Summary</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" data-tab="responses"><svg class="icon icon-sm"><use href="#i-table"></use></svg>Responses</button>
+    {% if is_admin %}
+    <button type="button" class="tab" role="tab" aria-selected="false" data-tab="access"><svg class="icon icon-sm"><use href="#i-users"></use></svg>Collaborators</button>
+    {% endif %}
+</div>
+
+<!-- Summary -->
+<section data-tabpanel="summary">
+    {% if not submissions %}
+    <div class="card empty">
+        <div class="empty-icon"><svg class="icon icon-xl"><use href="#i-inbox"></use></svg></div>
+        <h3>No responses yet</h3>
+        <p>Share your form link to start collecting responses. Charts will appear here automatically.</p>
+        <button type="button" class="btn btn-primary" data-copy="{{ url_for('forms.view_form', form_id=form.id, _external=True) }}"><svg class="icon icon-sm"><use href="#i-link"></use></svg>Copy form link</button>
+    </div>
+    {% else %}
+    {% if daily|length > 1 %}
+    <div class="card an-card" style="margin-bottom:14px">
+        <div class="an-head"><h3>Responses over time</h3><span class="spacer"></span><span class="muted small">Last {{ daily|length }} active days</span></div>
+        {% set peak = daily|map(attribute=1)|max %}
+        <div class="spark" role="img" aria-label="Daily responses">
+            {% for day, count in daily %}<span style="height:{{ (count * 100 / peak)|round|int }}%" title="{{ day }}: {{ count }}"></span>{% endfor %}
+        </div>
+        <div class="scale-labels"><span>{{ daily[0][0] }}</span><span>{{ daily[-1][0] }}</span></div>
+    </div>
+    {% endif %}
+    <div class="grid">
+    {% for item in summary %}
+        <div class="card an-card">
+            <div class="an-head">
+                <div style="min-width:0">
+                    <h3>{{ loop.index }}. {{ item.field.label or 'Untitled question' }}</h3>
+                    <p class="muted small">{{ item.answered }} of {{ item.total }} answered</p>
+                </div>
+            </div>
+            {% if item.kind == 'bars' %}
+                {% for bar in item.bars %}
+                <div class="bar-row">
+                    <span class="bar-label" title="{{ bar.label }}">{{ bar.label }}</span>
+                    <div class="bar-track"><div class="bar-fill" style="width:{{ bar.percent }}%"></div></div>
+                    <span class="bar-value"><strong>{{ bar.count }}</strong> · {{ bar.percent }}%</span>
+                </div>
+                {% endfor %}
+            {% elif item.kind == 'numeric' %}
+                <div class="row row-wrap" style="gap:28px;margin-bottom:10px">
+                    <div><div class="big-number">{{ item.average if item.average is not none else '—' }}</div><div class="muted small">Average</div></div>
+                    {% if item.nps is defined %}<div><div class="big-number" style="color:{{ 'var(--success)' if item.nps >= 0 else 'var(--danger)' }}">{{ item.nps }}</div><div class="muted small">NPS</div></div>{% endif %}
+                    <div><div class="big-number" style="font-size:22px;padding-top:8px">{{ '%g'|format(item.min) if item.min is not none else '—' }} – {{ '%g'|format(item.max) if item.max is not none else '—' }}</div><div class="muted small">Range</div></div>
+                </div>
+                {% for bar in item.bars or [] %}
+                <div class="bar-row">
+                    <span class="bar-label">{{ bar.label }}{% if item.field.type == 'rating' %} ★{% endif %}</span>
+                    <div class="bar-track"><div class="bar-fill" style="width:{{ bar.percent }}%"></div></div>
+                    <span class="bar-value"><strong>{{ bar.count }}</strong> · {{ bar.percent }}%</span>
+                </div>
+                {% endfor %}
+            {% elif item.kind == 'matrix' %}
+                <div class="table-wrap"><table class="table">
+                    <thead><tr><th></th>{% for c in item.columns %}<th class="num">{{ c }}</th>{% endfor %}</tr></thead>
+                    <tbody>{% for r in item.rows %}<tr><td>{{ r.label }}</td>{% for n in r.counts %}<td class="num">{{ n }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+                </table></div>
+            {% elif item.kind == 'ranking' %}
+                {% for r in item.ranking %}
+                <div class="bar-row"><span class="bar-label"><span class="rank-pos" style="display:inline-grid;width:22px;height:22px;margin-right:6px">{{ loop.index }}</span>{{ r.label }}</span><span></span><span class="bar-value">avg #{{ r.average }}</span></div>
+                {% else %}<p class="muted small">No rankings yet.</p>{% endfor %}
+            {% else %}
+                <div class="samples">
+                    {% for s in item.samples %}<div class="sample">{{ s }}</div>{% else %}<p class="muted small">No answers yet.</p>{% endfor %}
+                </div>
+                {% if item.answered > item.samples|length %}<p class="muted xsmall" style="margin-top:8px">Showing the latest {{ item.samples|length }} answers. See all in the Responses tab.</p>{% endif %}
+            {% endif %}
+        </div>
+    {% endfor %}
+    </div>
+    {% endif %}
+</section>
+
+<!-- Responses -->
+<section data-tabpanel="responses" class="hidden">
+    <div class="card">
+        <div class="card-header">
+            <label class="input-group" style="flex:1;max-width:360px">
+                <span class="sr-only">Search responses</span>
+                <svg class="icon icon-sm"><use href="#i-search"></use></svg>
+                <input type="search" id="respSearch" class="input input-sm" placeholder="Search responses…">
+            </label>
+            <span class="spacer"></span>
+            <span class="muted small" id="respCount">{{ rows|length }} responses</span>
+        </div>
+        {% if rows %}
+        <div class="table-wrap">
+            <table class="table" id="respTable">
+                <thead>
+                    <tr>
+                        <th>Submitted</th>
+                        <th>Respondent</th>
+                        {% for h in headers %}<th title="{{ h }}"><span class="table-cell-clip" style="display:inline-block;max-width:220px">{{ h }}</span></th>{% endfor %}
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr id="sub-{{ row.id }}" data-id="{{ row.id }}" style="cursor:pointer">
+                        <td class="muted" style="white-space:nowrap">{{ row.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td style="white-space:nowrap"><strong>{{ row.submitted_by or 'Anonymous' }}</strong></td>
+                        {% for v in row.cells %}<td class="table-cell-clip" title="{{ v }}">{{ v }}</td>{% endfor %}
+                        <td style="white-space:nowrap">
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" data-view-sub="{{ row.id }}" aria-label="View response"><svg class="icon icon-sm"><use href="#i-eye"></use></svg></button>
+                            <button type="button" class="btn btn-danger-ghost btn-icon btn-sm" data-delete-sub="{{ row.id }}" aria-label="Delete response"><svg class="icon icon-sm"><use href="#i-trash"></use></svg></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty"><h3>No responses yet</h3><p>Responses will appear here as they arrive.</p></div>
+        {% endif %}
+    </div>
+</section>
+
+{% if is_admin %}
+<!-- Collaborators -->
+<section data-tabpanel="access" class="hidden">
+    <div class="card" style="max-width:720px">
+        <div class="card-header">
+            <div><h2 class="card-title">Collaborators</h2><p class="muted small">Collaborators can view results and export data.</p></div>
+        </div>
+        <div class="card-body">
+            <form class="row" id="collabForm">
+                <label class="input-group" style="flex:1">
+                    <span class="sr-only">Wikimedia username</span>
+                    <svg class="icon icon-sm"><use href="#i-user"></use></svg>
+                    <input type="text" id="collaborator-username" class="input" placeholder="Wikimedia username" autocomplete="off">
+                </label>
+                <button type="submit" class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-plus"></use></svg>Add</button>
+            </form>
+        </div>
+        <table class="table">
+            <tbody>
+            {% for perm in collaborators %}
+            <tr id="collab-{{ loop.index }}">
+                <td><span class="row" style="gap:10px"><span class="avatar">{{ perm.username[:1] }}</span><strong>{{ perm.username }}</strong></span></td>
+                <td>{% if perm.role == 'admin' %}<span class="badge badge-accent">Owner</span>{% else %}<span class="badge">Viewer</span>{% endif %}</td>
+                <td class="num">
+                    {% if perm.role != 'admin' %}
+                    <button type="button" class="btn btn-danger-ghost btn-sm" data-remove-collab="{{ perm.username }}" data-row="collab-{{ loop.index }}">Remove</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<dialog class="modal" id="respDialog" aria-labelledby="respTitle">
+    <div class="modal-header">
+        <div><h3 id="respTitle">Response</h3><p class="muted small" id="respMeta"></p></div>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-icon" data-resp-nav="-1" aria-label="Previous response"><svg class="icon"><use href="#i-up"></use></svg></button>
+        <button type="button" class="btn btn-ghost btn-icon" data-resp-nav="1" aria-label="Next response"><svg class="icon"><use href="#i-down"></use></svg></button>
+        <button type="button" class="btn btn-ghost btn-icon" data-close-dialog aria-label="Close"><svg class="icon"><use href="#i-x"></use></svg></button>
+    </div>
+    <div class="modal-body"><dl class="response-detail" id="respBody" style="margin:0"></dl></div>
+</dialog>
+
+<script type="application/json" id="respData">{{ {'headers': headers, 'rows': rows | map(attribute='id') | list, 'values': rows | map(attribute='cells') | list, 'who': rows | map(attribute='submitted_by') | list, 'when': rows | map(attribute='submitted_at') | map('string') | list} | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
 <script>
-    function toggleData(id) {
-        const el = document.getElementById(id);
-        if (el.classList.contains('hidden')) {
-            try {
-                // Try to pretty print if it's not already
-                const obj = JSON.parse(el.innerText);
-                el.innerText = JSON.stringify(obj, null, 2);
-            } catch(e) {}
-            el.classList.remove('hidden');
-        } else {
-            el.classList.add('hidden');
-        }
+document.addEventListener('DOMContentLoaded', () => {
+    const { escapeHtml: esc, toast } = window.DTOC;
+    const formId = {{ form.id }};
+
+    document.querySelectorAll('[data-tab]').forEach(tab => tab.addEventListener('click', () => {
+        document.querySelectorAll('[data-tab]').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+        document.querySelectorAll('[data-tabpanel]').forEach(p => p.classList.toggle('hidden', p.dataset.tabpanel !== tab.dataset.tab));
+    }));
+
+    const data = JSON.parse(document.getElementById('respData').textContent);
+    const dialog = document.getElementById('respDialog');
+    let currentIndex = -1;
+
+    function openResponse(index) {
+        if (index < 0 || index >= data.rows.length) return;
+        currentIndex = index;
+        document.getElementById('respTitle').textContent = `Response ${data.rows.length - index} of ${data.rows.length}`;
+        document.getElementById('respMeta').textContent = `${data.who[index] || 'Anonymous'} · ${String(data.when[index]).slice(0, 16)} UTC`;
+        document.getElementById('respBody').innerHTML = data.headers.map((h, i) => {
+            const v = data.values[index][i];
+            return `<dt>${esc(h)}</dt><dd>${v === '' || v == null ? '<span class="muted">No answer</span>' : esc(v)}</dd>`;
+        }).join('');
+        if (!dialog.open) dialog.showModal();
     }
 
-    async function deleteSubmission(id) {
-        if (!confirm("Are you sure you want to delete this submission? This cannot be undone.")) return;
-        
-        try {
-            const res = await fetch(`/api/form/{{ form.id }}/submission/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                const desktop = document.getElementById('sub-' + id);
-                const mobile = document.getElementById('m-sub-' + id);
-                if (desktop) desktop.remove();
-                if (mobile) mobile.remove();
-            } else {
-                alert("Failed to delete submission.");
-            }
-        } catch (e) {
-            alert("Error: " + e);
+    document.querySelectorAll('[data-resp-nav]').forEach(b => b.addEventListener('click', () => {
+        let i = currentIndex + Number(b.dataset.respNav);
+        while (i >= 0 && i < data.rows.length && !document.getElementById('sub-' + data.rows[i])) i += Number(b.dataset.respNav);
+        openResponse(i);
+    }));
+
+    const table = document.getElementById('respTable');
+    if (table) table.addEventListener('click', async (e) => {
+        const del = e.target.closest('[data-delete-sub]');
+        if (del) {
+            e.stopPropagation();
+            const id = del.dataset.deleteSub;
+            if (!confirm('Delete this response? This cannot be undone.')) return;
+            const res = await fetch(`/api/form/${formId}/submission/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+            if (res.ok) { document.getElementById('sub-' + id).remove(); toast('Response deleted'); updateCount(); }
+            else toast('Failed to delete response.', 'alert');
+            return;
         }
+        const tr = e.target.closest('tr[data-id]');
+        if (tr) openResponse(data.rows.indexOf(Number(tr.dataset.id)));
+    });
+
+    const search = document.getElementById('respSearch');
+    function updateCount() {
+        const rows = table ? [...table.tBodies[0].rows] : [];
+        const shown = rows.filter(r => !r.classList.contains('hidden')).length;
+        document.getElementById('respCount').textContent = `${shown} response${shown === 1 ? '' : 's'}`;
     }
+    if (search && table) search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        [...table.tBodies[0].rows].forEach(r => r.classList.toggle('hidden', !r.textContent.toLowerCase().includes(q)));
+        updateCount();
+    });
 
     {% if is_admin %}
-    async function addCollaborator() {
+    document.getElementById('collabForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
         const username = document.getElementById('collaborator-username').value.trim();
-        if (!username) return alert("Enter a username");
-        
-        try {
-            const res = await fetch(`/api/form/{{ form.id }}/collaborator`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                window.location.reload();
-            } else {
-                alert(data.error || "Failed to add collaborator");
-            }
-        } catch (e) {
-            alert("Error: " + e);
-        }
-    }
-
-    async function removeCollaborator(username) {
+        if (!username) return toast('Enter a username', 'alert');
+        const res = await fetch(`/api/form/${formId}/collaborator`, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+        });
+        const out = await res.json().catch(() => ({}));
+        if (res.ok) window.location.reload();
+        else toast(out.error || 'Failed to add collaborator', 'alert');
+    });
+    document.querySelectorAll('[data-remove-collab]').forEach(btn => btn.addEventListener('click', async () => {
+        const username = btn.dataset.removeCollab;
         if (!confirm(`Remove access for ${username}?`)) return;
-        
-        try {
-            const res = await fetch(`/api/form/{{ form.id }}/collaborator/${encodeURIComponent(username)}`, {
-                method: 'DELETE'
-            });
-            const data = await res.json();
-            if (res.ok) {
-                document.getElementById('collab-' + username).remove();
-            } else {
-                alert(data.error || "Failed to remove collaborator");
-            }
-        } catch (e) {
-            alert("Error: " + e);
-        }
-    }
+        const res = await fetch(`/api/form/${formId}/collaborator/${encodeURIComponent(username)}`, { method: 'DELETE', credentials: 'same-origin' });
+        const out = await res.json().catch(() => ({}));
+        if (res.ok) { document.getElementById(btn.dataset.row).remove(); toast('Access removed'); }
+        else toast(out.error || 'Failed to remove collaborator', 'alert');
+    }));
     {% endif %}
+});
 </script>
 {% endblock %}

@@ -3,111 +3,91 @@ from models import db, Form, Submission, Permission, AuditLog
 import json
 import csv
 from io import StringIO, BytesIO
-from forms_api import login_required
+from forms_api import login_required, load_schema, load_data
+from form_schema import column_headers, format_value
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 
 export_bp = Blueprint('export', __name__)
 
+
+def _load_export(form_id, action, label):
+    """Shared permission check, audit logging and data loading for exports."""
+    form = Form.query.get_or_404(form_id)
+    perm = Permission.query.filter_by(form_id=form.id, username=session['username']).first()
+    if not perm:
+        return form, None
+    submissions = Submission.query.filter_by(form_id=form.id).order_by(Submission.submitted_at).all()
+    db.session.add(AuditLog(action=action, details=f"Form {form.id} exported{label} by {session['username']}"))
+    db.session.commit()
+    datas = [load_data(sub) for sub in submissions]
+    headers = column_headers(load_schema(form), datas)
+    return form, (submissions, datas, headers)
+
+
+def _denied():
+    flash("You don't have permission to export this form.", "danger")
+    return redirect(url_for('forms.dashboard'))
+
+
 @export_bp.route('/form/<int:form_id>/export/csv')
 @login_required
 def export_csv(form_id):
-    form = Form.query.get_or_404(form_id)
-    
-    perm = Permission.query.filter_by(form_id=form.id, username=session['username']).first()
-    if not perm:
-        flash("You don't have permission to export this form.", "danger")
-        return redirect(url_for('forms.dashboard'))
-        
-    submissions = Submission.query.filter_by(form_id=form.id).all()
-    
-    # Log export
-    log = AuditLog(action='EXPORT_CSV', details=f"Form {form.id} exported by {session['username']}")
-    db.session.add(log)
-    db.session.commit()
-    
-    # Generate CSV using standard library since pandas isn't available locally
+    form, loaded = _load_export(form_id, 'EXPORT_CSV', '')
+    if loaded is None:
+        return _denied()
+    submissions, datas, headers = loaded
+
     si = StringIO()
     cw = csv.writer(si)
-    
     if not submissions:
         cw.writerow(["No submissions found."])
     else:
-        # Extract headers from the first submission
-        first_data = json.loads(submissions[0].data)
-        if 'data' in first_data:
-            # Form.io nests data under 'data' key usually
-            first_data = first_data['data']
-        headers = list(first_data.keys())
         cw.writerow(['ID', 'Submitted At', 'Submitted By'] + headers)
-        
-        for sub in submissions:
-            data = json.loads(sub.data)
-            if 'data' in data:
-                data = data['data']
+        for sub, data in zip(submissions, datas):
             row = [sub.id, sub.submitted_at.isoformat(), sub.submitted_by]
-            row.extend([data.get(h, '') for h in headers])
+            row.extend(format_value(data.get(h, '')) for h in headers)
             cw.writerow(row)
-            
-    output = si.getvalue()
-    
+
     return Response(
-        output,
+        si.getvalue(),
         mimetype="text/csv",
         headers={"Content-disposition": f"attachment; filename=form_{form.id}_export.csv"}
     )
 
+
 @export_bp.route('/form/<int:form_id>/export/json')
 @login_required
 def export_json(form_id):
-    form = Form.query.get_or_404(form_id)
-    
-    perm = Permission.query.filter_by(form_id=form.id, username=session['username']).first()
-    if not perm:
-        flash("You don't have permission to export this form.", "danger")
-        return redirect(url_for('forms.dashboard'))
-        
-    submissions = Submission.query.filter_by(form_id=form.id).all()
-    
-    # Log export
-    log = AuditLog(action='EXPORT_JSON', details=f"Form {form.id} exported as JSON by {session['username']}")
-    db.session.add(log)
-    db.session.commit()
-    
-    output_data = []
-    for sub in submissions:
-        data = json.loads(sub.data)
-        if 'data' in data:
-            data = data['data']
-        output_data.append({
+    form, loaded = _load_export(form_id, 'EXPORT_JSON', ' as JSON')
+    if loaded is None:
+        return _denied()
+    submissions, datas, _ = loaded
+
+    output_data = [
+        {
             "id": sub.id,
             "submitted_at": sub.submitted_at.isoformat(),
             "submitted_by": sub.submitted_by,
             "data": data
-        })
-        
+        }
+        for sub, data in zip(submissions, datas)
+    ]
+
     return Response(
-        json.dumps(output_data, indent=2),
+        json.dumps(output_data, indent=2, ensure_ascii=False),
         mimetype="application/json",
         headers={"Content-disposition": f"attachment; filename=form_{form.id}_export.json"}
     )
 
+
 @export_bp.route('/form/<int:form_id>/export/excel')
 @login_required
 def export_excel(form_id):
-    form = Form.query.get_or_404(form_id)
-
-    perm = Permission.query.filter_by(form_id=form.id, username=session['username']).first()
-    if not perm:
-        flash("You don't have permission to export this form.", "danger")
-        return redirect(url_for('forms.dashboard'))
-
-    submissions = Submission.query.filter_by(form_id=form.id).all()
-
-    # Log export
-    log = AuditLog(action='EXPORT_EXCEL', details=f"Form {form.id} exported as Excel by {session['username']}")
-    db.session.add(log)
-    db.session.commit()
+    form, loaded = _load_export(form_id, 'EXPORT_EXCEL', ' as Excel')
+    if loaded is None:
+        return _denied()
+    submissions, datas, field_headers = loaded
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -120,12 +100,7 @@ def export_excel(form_id):
     if not submissions:
         ws.append(["No submissions found."])
     else:
-        first_data = json.loads(submissions[0].data)
-        if 'data' in first_data:
-            first_data = first_data['data']
-        field_headers = list(first_data.keys())
         all_headers = ['ID', 'Submitted At', 'Submitted By'] + field_headers
-
         for col_idx, header in enumerate(all_headers, start=1):
             cell = ws.cell(row=1, column=col_idx, value=header)
             cell.font = header_font
@@ -135,20 +110,9 @@ def export_excel(form_id):
         # Freeze the header row
         ws.freeze_panes = "A2"
 
-        for sub in submissions:
-            data = json.loads(sub.data)
-            if 'data' in data:
-                data = data['data']
+        for sub, data in zip(submissions, datas):
             row = [sub.id, sub.submitted_at.isoformat(), sub.submitted_by]
-            
-            for h in field_headers:
-                val = data.get(h, '')
-                if isinstance(val, list):
-                    val = ', '.join(map(str, val))
-                elif isinstance(val, dict):
-                    val = json.dumps(val)
-                row.append(val)
-                
+            row.extend(format_value(data.get(h, '')) for h in field_headers)
             ws.append(row)
 
         # Auto-fit column widths (materialise the column into a list to avoid double-iteration)

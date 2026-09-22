@@ -1,65 +1,150 @@
 {% extends "base.html" %}
+{% block title %}My forms · DTOC Forms{% endblock %}
 
 {% block content %}
-<div class="mb-6 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-    <h2 class="text-2xl font-bold text-gray-900">Your Dashboard</h2>
-    <a href="{{ url_for('forms.builder') }}" class="inline-flex justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-md shadow-sm">
-        Create New Form
-    </a>
+<div class="page-header">
+    <div>
+        <h1>My forms</h1>
+        <p>Create, share and analyse your forms.</p>
+    </div>
+    <div class="spacer"></div>
+    <a href="{{ url_for('forms.builder') }}" class="btn btn-primary"><svg class="icon"><use href="#i-plus"></use></svg>New form</a>
 </div>
 
-<div class="bg-white shadow-md border border-gray-200 overflow-hidden rounded-xl">
-    <ul class="divide-y divide-gray-200">
-        {% for form in forms %}
-        <li>
-            <div class="px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div class="font-medium text-blue-700 break-words">
-                    <span class="text-base">{{ form.title }}</span>
-                    {% if not form.is_active %}
-                        <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                            Closed
-                        </span>
-                    {% else %}
-                        <span class="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                            Active
-                        </span>
-                    {% endif %}
-                </div>
-                <div class="w-full sm:w-auto flex-shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:justify-end">
-                    <a href="{{ url_for('forms.view_form', form_id=form.id) }}" class="text-center text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-2 rounded">View Form</a>
-                    {% if roles[form.id] == 'admin' %}
-                    <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="text-center text-orange-600 hover:text-orange-900 bg-orange-50 px-3 py-2 rounded">Edit Form</a>
-                    {% endif %}
-                    <a href="{{ url_for('forms.view_submissions', form_id=form.id) }}" class="text-center text-blue-600 hover:text-blue-900 bg-blue-50 px-3 py-2 rounded">Submissions</a>
-                    <a href="{{ url_for('export.export_csv', form_id=form.id) }}" class="text-center text-green-600 hover:text-green-900 bg-green-50 px-3 py-2 rounded">Export CSV</a>
-                    <a href="{{ url_for('export.export_json', form_id=form.id) }}" class="text-center text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-3 py-2 rounded">Export JSON</a>
-                    {% if roles[form.id] == 'admin' %}
-                        {% if form.is_active %}
-                            <form action="{{ url_for('forms.close_form', form_id=form.id) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to close this form? Submissions will be deleted 90 days after closing.');">
-                                <button type="submit" class="w-full text-red-600 hover:text-red-900 bg-red-50 px-3 py-2 rounded">Close Form</button>
-                            </form>
-                        {% else %}
-                            <form action="{{ url_for('forms.reopen_form', form_id=form.id) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to reopen this form?');">
-                                <button type="submit" class="w-full text-yellow-600 hover:text-yellow-900 bg-yellow-50 px-3 py-2 rounded">Reopen Form</button>
-                            </form>
-                        {% endif %}
-                    {% endif %}
-                </div>
+<div class="stats">
+    <div class="card stat">
+        <div class="stat-icon"><svg class="icon"><use href="#i-file"></use></svg></div>
+        <div><div class="stat-value">{{ totals.forms }}</div><div class="stat-label">Forms</div></div>
+    </div>
+    <div class="card stat">
+        <div class="stat-icon green"><svg class="icon"><use href="#i-unlock"></use></svg></div>
+        <div><div class="stat-value">{{ totals.active }}</div><div class="stat-label">Accepting responses</div></div>
+    </div>
+    <div class="card stat">
+        <div class="stat-icon blue"><svg class="icon"><use href="#i-inbox"></use></svg></div>
+        <div><div class="stat-value">{{ totals.responses }}</div><div class="stat-label">Total responses</div></div>
+    </div>
+</div>
+
+{% if forms %}
+<div class="toolbar">
+    <label class="input-group">
+        <span class="sr-only">Search forms</span>
+        <svg class="icon icon-sm"><use href="#i-search"></use></svg>
+        <input type="search" id="formSearch" class="input" placeholder="Search forms…">
+    </label>
+    <div class="tabs" role="tablist" aria-label="Filter by status">
+        <button class="tab" role="tab" aria-selected="true" data-filter="all">All</button>
+        <button class="tab" role="tab" aria-selected="false" data-filter="active">Active</button>
+        <button class="tab" role="tab" aria-selected="false" data-filter="closed">Closed</button>
+    </div>
+</div>
+
+<div class="form-grid" id="formGrid">
+    {% for form in forms %}
+    {% set stat = stats.get(form.id, {'count': 0, 'last': None}) %}
+    {% set is_admin = roles[form.id] == 'admin' %}
+    <article class="card form-card" data-title="{{ form.title|lower }}" data-status="{{ 'active' if form.is_active else 'closed' }}">
+        <div class="form-card-top" style="{% if not form.is_active %}background:var(--border-strong){% endif %}"></div>
+        <div class="form-card-body">
+            <div class="row" style="gap:6px">
+                {% if form.is_active %}
+                    <span class="badge badge-success">Active</span>
+                {% else %}
+                    <span class="badge badge-danger">Closed</span>
+                {% endif %}
+                <span class="badge plain">{{ 'Owner' if is_admin else 'Viewer' }}</span>
             </div>
-            <div class="px-4 py-2 sm:px-6 text-sm text-gray-500 bg-gray-50/70">
-                Created: {{ form.created_at.strftime('%Y-%m-%d %H:%M') }} | 
+            <h3><a href="{{ url_for('forms.view_submissions', form_id=form.id) }}">{{ form.title }}</a></h3>
+            <div class="form-card-meta">
+                <span><svg class="icon icon-sm"><use href="#i-inbox"></use></svg><strong>{{ stat.count }}</strong>&nbsp;response{{ '' if stat.count == 1 else 's' }}</span>
+                <span><svg class="icon icon-sm"><use href="#i-calendar"></use></svg>{{ form.created_at.strftime('%d %b %Y') }}</span>
                 {% if form.closed_at %}
-                    Closed: {{ form.closed_at.strftime('%Y-%m-%d %H:%M') }}
+                <span><svg class="icon icon-sm"><use href="#i-lock"></use></svg>Closed {{ form.closed_at.strftime('%d %b %Y') }}</span>
+                {% elif stat.last %}
+                <span><svg class="icon icon-sm"><use href="#i-clock"></use></svg>Last {{ stat.last.strftime('%d %b') }}</span>
                 {% endif %}
             </div>
-        </li>
-        {% else %}
-        <li>
-            <div class="px-4 py-4 sm:px-6 text-gray-500 italic">
-                You haven't created any forms yet.
-            </div>
-        </li>
-        {% endfor %}
-    </ul>
+        </div>
+        <div class="form-card-actions">
+            <a href="{{ url_for('forms.view_submissions', form_id=form.id) }}" class="btn btn-soft btn-sm"><svg class="icon icon-sm"><use href="#i-chart"></use></svg>Results</a>
+            {% if is_admin %}
+            <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="btn btn-ghost btn-sm"><svg class="icon icon-sm"><use href="#i-edit"></use></svg>Edit</a>
+            {% endif %}
+            <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Copy link" aria-label="Copy link"
+                    data-copy="{{ url_for('forms.view_form', form_id=form.id, _external=True) }}"><svg class="icon icon-sm"><use href="#i-link"></use></svg></button>
+            <div class="spacer"></div>
+            <details class="menu">
+                <summary class="btn btn-ghost btn-icon btn-sm" aria-label="More actions"><svg class="icon icon-sm"><use href="#i-more"></use></svg></summary>
+                <div class="menu-panel">
+                    <a class="menu-item" href="{{ url_for('forms.view_form', form_id=form.id) }}" target="_blank" rel="noopener"><svg class="icon icon-sm"><use href="#i-eye"></use></svg>Open form</a>
+                    <a class="menu-item" href="{{ url_for('forms.form_share', form_id=form.id) }}"><svg class="icon icon-sm"><use href="#i-share"></use></svg>Share</a>
+                    <form action="{{ url_for('forms.duplicate_form', form_id=form.id) }}" method="POST">
+                        <button type="submit" class="menu-item"><svg class="icon icon-sm"><use href="#i-copy"></use></svg>Duplicate</button>
+                    </form>
+                    <div class="menu-sep"></div>
+                    <a class="menu-item" href="{{ url_for('export.export_csv', form_id=form.id) }}"><svg class="icon icon-sm"><use href="#i-download"></use></svg>Export CSV</a>
+                    <a class="menu-item" href="{{ url_for('export.export_excel', form_id=form.id) }}"><svg class="icon icon-sm"><use href="#i-download"></use></svg>Export Excel</a>
+                    <a class="menu-item" href="{{ url_for('export.export_json', form_id=form.id) }}"><svg class="icon icon-sm"><use href="#i-download"></use></svg>Export JSON</a>
+                    {% if is_admin %}
+                    <div class="menu-sep"></div>
+                    {% if form.is_active %}
+                    <form action="{{ url_for('forms.close_form', form_id=form.id) }}" method="POST" data-confirm="Close this form? Responses will be deleted 90 days after closing.">
+                        <button type="submit" class="menu-item"><svg class="icon icon-sm"><use href="#i-lock"></use></svg>Close form</button>
+                    </form>
+                    {% else %}
+                    <form action="{{ url_for('forms.reopen_form', form_id=form.id) }}" method="POST" data-confirm="Reopen this form?">
+                        <button type="submit" class="menu-item"><svg class="icon icon-sm"><use href="#i-unlock"></use></svg>Reopen form</button>
+                    </form>
+                    {% endif %}
+                    <form action="{{ url_for('forms.delete_form', form_id=form.id) }}" method="POST" data-confirm="Permanently delete this form and all {{ stat.count }} responses? This cannot be undone.">
+                        <button type="submit" class="menu-item danger"><svg class="icon icon-sm"><use href="#i-trash"></use></svg>Delete</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </details>
+        </div>
+    </article>
+    {% endfor %}
 </div>
+<div class="card empty hidden" id="noMatches">
+    <h3>No forms match your search</h3>
+    <p>Try a different name or status filter.</p>
+</div>
+{% else %}
+<div class="card empty">
+    <div class="empty-icon"><svg class="icon icon-xl"><use href="#i-sparkle"></use></svg></div>
+    <h3>Create your first form</h3>
+    <p>Start from scratch or pick a template such as event registration, feedback survey or grant application.</p>
+    <a href="{{ url_for('forms.builder') }}" class="btn btn-primary"><svg class="icon"><use href="#i-plus"></use></svg>Create form</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const search = document.getElementById('formSearch');
+    if (!search) return;
+    let status = 'all';
+    const cards = [...document.querySelectorAll('#formGrid .form-card')];
+    function apply() {
+        const q = search.value.trim().toLowerCase();
+        let shown = 0;
+        cards.forEach(card => {
+            const ok = card.dataset.title.includes(q) && (status === 'all' || card.dataset.status === status);
+            card.classList.toggle('hidden', !ok);
+            if (ok) shown++;
+        });
+        document.getElementById('noMatches').classList.toggle('hidden', shown > 0);
+    }
+    search.addEventListener('input', apply);
+    document.querySelectorAll('[data-filter]').forEach(tab => tab.addEventListener('click', () => {
+        document.querySelectorAll('[data-filter]').forEach(t => t.setAttribute('aria-selected', 'false'));
+        tab.setAttribute('aria-selected', 'true');
+        status = tab.dataset.filter;
+        apply();
+    }));
+})();
+</script>
 {% endblock %}
