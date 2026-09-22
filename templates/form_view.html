@@ -1,341 +1,74 @@
 {% extends "base.html" %}
-
-{% block extra_head %}
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-<style>
-    .gf-card {
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
-        margin-bottom: 24px;
-        transition: box-shadow 0.2s;
-    }
-    .gf-card.active {
-        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
-        border-left: 4px solid #4285f4;
-    }
-    .gf-top-card {
-        border-top: 10px solid #673ab7;
-    }
-    .gf-input {
-        width: 100%;
-        border: none;
-        border-bottom: 1px solid #e0e0e0;
-        border-radius: 0;
-        padding: 8px 0;
-        background: transparent;
-        font-size: 15px;
-    }
-    .gf-input:focus {
-        outline: none;
-        border-bottom: 2px solid #673ab7;
-        padding-bottom: 7px;
-    }
-    /* Custom radio and checkbox styles */
-    .gf-radio, .gf-checkbox {
-        width: 20px;
-        height: 20px;
-        accent-color: #673ab7;
-    }
-    .description-html p,
-    .description-html div {
-        margin: 0.25rem 0;
-    }
-    .description-html ul,
-    .description-html ol {
-        margin: 0.5rem 0 0.5rem 1.25rem;
-    }
-</style>
-{% endblock %}
+{% block title %}{{ form.title }} · DTOC Forms{% endblock %}
 
 {% block content %}
-<div class="w-full max-w-3xl mx-auto py-4 sm:py-8 px-2 sm:px-0">
-    <form id="submissionForm" onsubmit="submitForm(event)">
-        <!-- Header Card -->
-        <div class="gf-card gf-top-card p-5 sm:p-8" id="headerCard">
-            <div id="headerImageWrapper" class="hidden mb-5">
-                <img id="headerImage" alt="Form header image" class="w-full max-h-72 object-cover rounded-lg border border-gray-200">
+<div class="fv" data-accent="{{ schema.settings.theme_color }}">
+    <div class="card fv-header">
+        <div class="fv-header-band"></div>
+        <img id="headerImage" alt="" class="fv-header-image hidden">
+        <div class="fv-header-body">
+            {% if can_edit %}
+            <div class="row row-wrap" style="margin-bottom:10px">
+                <span class="badge badge-accent plain">You manage this form</span>
+                <span class="spacer"></span>
+                <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="btn btn-ghost btn-sm"><svg class="icon icon-sm"><use href="#i-edit"></use></svg>Edit</a>
+                <a href="{{ url_for('forms.view_submissions', form_id=form.id) }}" class="btn btn-ghost btn-sm"><svg class="icon icon-sm"><use href="#i-chart"></use></svg>Results</a>
             </div>
-            <h1 class="text-2xl sm:text-3xl font-normal text-gray-900 mb-2">{{ form.title }}</h1>
-            <div id="formDesc" class="description-html text-gray-600 text-sm"></div>
-            <div class="mt-4 pt-4 border-t border-gray-200">
-                <p class="text-sm text-gray-500">
-                    Logged in as <span class="font-medium text-gray-800">{{ session.username }}</span> (<a href="{{ url_for('auth.logout') }}" class="text-blue-600 hover:underline">Switch account</a>)
-                </p>
-                <p class="text-red-600 text-sm mt-2">* Indicates required question</p>
-            </div>
-        </div>
-        
-        <!-- Disclaimer & Transparency Card -->
-        <div class="gf-card overflow-hidden">
-            <!-- Header bar -->
-            <div class="flex items-center gap-3 px-5 sm:px-8 py-4 bg-gradient-to-r from-slate-700 to-slate-800">
-                <span class="material-icons text-white opacity-90" style="font-size:22px;">verified_user</span>
-                <h2 class="text-sm font-semibold text-white tracking-wide uppercase">Notice &amp; Disclaimer</h2>
-            </div>
-
-            <div class="px-5 sm:px-8 py-5 bg-slate-50 grid gap-3 sm:grid-cols-2">
-                <!-- Data Retention -->
-                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">schedule</span>
-                    <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Data Retention</p>
-                        <p class="text-sm text-slate-700">Responses are stored for <strong>90 days after the form is closed</strong>, then permanently deleted in line with Wikimedia data-minimization principles.</p>
-                    </div>
-                </div>
-
-                <!-- Intended Use -->
-                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">policy</span>
-                    <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Intended Use</p>
-                        <p class="text-sm text-slate-700">This form is for <strong>Wikimedia project-related purposes only</strong>. Submissions for unrelated purposes will be removed.</p>
-                    </div>
-                </div>
-
-                <!-- Access Control -->
-                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">manage_accounts</span>
-                    <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Form Creator</p>
-                        <p class="text-sm text-slate-700">
-                            Created by
-                            <span class="inline-flex items-center gap-1 mt-1">
-                                <span class="bg-slate-100 text-slate-800 text-xs font-medium px-2 py-0.5 rounded-full border border-slate-200">{{ form.created_by }}</span>
-                            </span>
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Who Has Access -->
-                {% if permissions %}
-                <div class="flex gap-3 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-                    <span class="material-icons text-slate-500 mt-0.5 flex-shrink-0" style="font-size:20px;">group</span>
-                    <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Users with Access</p>
-                        <div class="flex flex-wrap gap-1.5">
-                            {% for perm in permissions %}
-                            <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border
-                                {% if perm.role == 'admin' %}bg-purple-50 text-purple-700 border-purple-200
-                                {% else %}bg-green-50 text-green-700 border-green-200{% endif %}">
-                                {{ perm.username }}
-                                <span class="opacity-60">&middot; {{ perm.role }}</span>
-                            </span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
+            {% endif %}
+            <h1 class="fv-title">{{ form.title }}</h1>
+            <div id="formDesc" class="fv-desc rich"></div>
+            <div class="fv-meta">
+                <span><svg class="icon icon-sm"><use href="#i-user"></use></svg>Responding as <strong>{{ session.username }}</strong>&nbsp;·&nbsp;<a href="{{ url_for('auth.logout') }}">Switch account</a></span>
+                {% if schema.settings.close_at %}
+                <span><svg class="icon icon-sm"><use href="#i-clock"></use></svg>Closes {{ schema.settings.close_at.replace('T', ' ') }} UTC</span>
                 {% endif %}
-            </div>
-
-            <div class="px-5 sm:px-8 py-3 bg-slate-100 border-t border-slate-200">
-                <p class="text-xs text-slate-400">Your response is associated with your Wikimedia account. For questions, contact the form creator.</p>
+                <span><svg class="icon icon-sm"><use href="#i-info"></use></svg><span class="req">*</span>&nbsp;Required</span>
             </div>
         </div>
+        <details class="disclosure" style="border-top:1px solid var(--border)">
+            <summary><svg class="icon icon-sm"><use href="#i-shield"></use></svg>Privacy notice &amp; disclaimer<svg class="icon icon-sm chev"><use href="#i-down"></use></svg></summary>
+            <div style="padding:0 22px 20px">
+                <div class="notice-grid">
+                    <div class="notice"><svg class="icon icon-sm"><use href="#i-clock"></use></svg><div><div class="notice-title">Data retention</div>Responses are stored for <strong>90 days after the form is closed</strong>, then permanently deleted in line with Wikimedia data-minimization principles.</div></div>
+                    <div class="notice"><svg class="icon icon-sm"><use href="#i-shield"></use></svg><div><div class="notice-title">Intended use</div>This form is for <strong>Wikimedia project-related purposes only</strong>. Submissions for unrelated purposes will be removed.</div></div>
+                    <div class="notice"><svg class="icon icon-sm"><use href="#i-user"></use></svg><div><div class="notice-title">Form creator</div><span class="chip">{{ form.created_by }}</span></div></div>
+                    {% if permissions %}
+                    <div class="notice"><svg class="icon icon-sm"><use href="#i-users"></use></svg><div><div class="notice-title">Users with access</div>
+                        <div class="row row-wrap" style="gap:6px;margin-top:4px">
+                        {% for perm in permissions %}<span class="chip">{{ perm.username }} <span class="muted">· {{ perm.role }}</span></span>{% endfor %}
+                        </div></div></div>
+                    {% endif %}
+                </div>
+                <p class="xsmall muted" style="margin-top:12px">Your response is associated with your Wikimedia account. For questions, contact the form creator.</p>
+            </div>
+        </details>
+    </div>
 
-        <div id="fieldsContainer"></div>
-
-        <div class="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mt-6 mb-12">
-            <button type="submit" class="w-full sm:w-auto bg-[#673ab7] hover:bg-[#5e35b1] text-white font-medium py-2.5 px-6 rounded shadow transition-colors">
-                Submit
-            </button>
-            <button type="button" onclick="document.getElementById('submissionForm').reset()" class="w-full sm:w-auto text-[#673ab7] hover:bg-purple-50 font-medium py-2.5 px-4 rounded transition-colors border border-purple-100">
-                Clear form
-            </button>
-        </div>
-    </form>
+    <div id="formRoot"></div>
 </div>
+<script type="application/json" id="formSchema">{{ schema | tojson }}</script>
+{% endblock %}
 
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/form-runtime.js') }}" defer></script>
 <script>
-    const schema = {{ form.schema | safe }};
-    const container = document.getElementById('fieldsContainer');
-    const ALLOWED_DESC_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a']);
+document.addEventListener('DOMContentLoaded', () => {
+    const schema = JSON.parse(document.getElementById('formSchema').textContent);
+    const desc = DTOCForm.sanitizeHtml(schema.description_html || schema.description || '');
+    const descEl = document.getElementById('formDesc');
+    if (desc) descEl.innerHTML = desc; else descEl.remove();
 
-    function sanitizeUrl(url, allowMailTo = false, allowDataImage = false) {
-        if (!url) return '';
-        const trimmed = String(url).trim();
-        if (allowDataImage) {
-            const dataMatch = trimmed.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)$/i);
-            if (dataMatch) return trimmed;
-        }
-        try {
-            const parsed = new URL(trimmed);
-            const protocols = allowMailTo ? ['http:', 'https:', 'mailto:'] : ['http:', 'https:'];
-            return protocols.includes(parsed.protocol) ? trimmed : '';
-        } catch (_) {
-            return '';
-        }
+    const header = DTOCForm.sanitizeUrl(schema.header_image_url, false, true);
+    if (header) {
+        const img = document.getElementById('headerImage');
+        img.src = header;
+        img.classList.remove('hidden');
     }
 
-    function sanitizeDescriptionHtml(html) {
-        const template = document.createElement('template');
-        template.innerHTML = html || '';
-
-        const sanitizeNode = (node) => {
-            if (node.nodeType === Node.TEXT_NODE) return;
-            if (node.nodeType !== Node.ELEMENT_NODE) {
-                node.remove();
-                return;
-            }
-
-            const tagName = node.tagName.toLowerCase();
-            [...node.childNodes].forEach(sanitizeNode);
-            if (!ALLOWED_DESC_TAGS.has(tagName)) {
-                const fragment = document.createDocumentFragment();
-                while (node.firstChild) fragment.appendChild(node.firstChild);
-                node.replaceWith(fragment);
-                return;
-            }
-
-            const originalHref = tagName === 'a' ? node.getAttribute('href') : '';
-            [...node.attributes].forEach(attr => node.removeAttribute(attr.name));
-            if (tagName === 'a') {
-                const href = sanitizeUrl(originalHref, true);
-                if (href) {
-                    node.setAttribute('href', href);
-                    node.setAttribute('target', '_blank');
-                    node.setAttribute('rel', 'noopener noreferrer nofollow');
-                }
-            }
-
-        };
-
-        [...template.content.childNodes].forEach(sanitizeNode);
-        return template.innerHTML.trim();
-    }
-
-    const descriptionHtml = sanitizeDescriptionHtml(schema.description_html || schema.description || '');
-    if (descriptionHtml) {
-        document.getElementById('formDesc').innerHTML = descriptionHtml;
-    } else {
-        document.getElementById('formDesc').style.display = 'none';
-    }
-
-    const headerImageUrl = sanitizeUrl(schema.header_image_url, false, true);
-    if (headerImageUrl) {
-        const image = document.getElementById('headerImage');
-        image.src = headerImageUrl;
-        document.getElementById('headerImageWrapper').classList.remove('hidden');
-    }
-
-    const fields = schema.fields || [];
-
-    fields.forEach(f => {
-        const card = document.createElement('div');
-        card.className = 'gf-card p-5 sm:p-8';
-        card.onclick = () => {
-            document.querySelectorAll('.gf-card').forEach(c => c.classList.remove('active'));
-            card.classList.add('active');
-        };
-
-        const requiredMark = f.required ? '<span class="text-red-600 ml-1">*</span>' : '';
-        let inputHtml = '';
-
-        if (f.type === 'text') {
-            inputHtml = `<input type="text" name="${f.id}" ${f.required ? 'required' : ''} class="gf-input w-full sm:w-1/2" placeholder="Your answer">`;
-        } else if (f.type === 'textarea') {
-            inputHtml = `<textarea name="${f.id}" ${f.required ? 'required' : ''} class="gf-input w-full resize-none" rows="1" oninput="this.style.height = '';this.style.height = this.scrollHeight + 'px'" placeholder="Your answer"></textarea>`;
-        } else if (f.type === 'date') {
-            inputHtml = `<input type="date" name="${f.id}" ${f.required ? 'required' : ''} class="gf-input w-full sm:w-1/3">`;
-        } else if (f.type === 'dropdown') {
-            inputHtml = `<select name="${f.id}" ${f.required ? 'required' : ''} class="mt-2 block w-full sm:w-1/2 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-[#673ab7] focus:border-[#673ab7] sm:text-sm rounded-md bg-gray-50 border">
-                <option value="">Choose</option>`;
-            f.options.forEach(opt => {
-                inputHtml += `<option value="${opt}">${opt}</option>`;
-            });
-            inputHtml += `</select>`;
-        } else if (f.type === 'radio') {
-            inputHtml = '<div class="space-y-4">';
-            f.options.forEach((opt, i) => {
-                inputHtml += `
-                    <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="radio" name="${f.id}" value="${opt}" ${f.required ? 'required' : ''} class="gf-radio">
-                        <span class="text-gray-700">${opt}</span>
-                    </label>
-                `;
-            });
-            inputHtml += '</div>';
-        } else if (f.type === 'checkbox') {
-            inputHtml = '<div class="space-y-4">';
-            f.options.forEach((opt, i) => {
-                inputHtml += `
-                    <label class="flex items-center space-x-3 cursor-pointer">
-                        <input type="checkbox" name="${f.id}[]" value="${opt}" class="gf-checkbox">
-                        <span class="text-gray-700">${opt}</span>
-                    </label>
-                `;
-            });
-            inputHtml += '</div>';
-            // Custom validation for required checkbox group
-            if (f.required) {
-                inputHtml += `<input type="hidden" id="req_${f.id}" required value="">`;
-            }
-        }
-
-        card.innerHTML = `
-            <div class="mb-6">
-                <span class="text-base font-normal text-gray-800">${f.label}${requiredMark}</span>
-            </div>
-            <div class="pl-2">
-                ${inputHtml}
-            </div>
-        `;
-
-        if (f.type === 'checkbox' && f.required) {
-            // Add listener to manage hidden required field
-            card.addEventListener('change', () => {
-                const checked = card.querySelectorAll(`input[type="checkbox"]:checked`).length > 0;
-                document.getElementById(`req_${f.id}`).value = checked ? 'valid' : '';
-            });
-        }
-
-        container.appendChild(card);
+    DTOCForm.create(document.getElementById('formRoot'), schema, {
+        submitUrl: {{ url_for('forms.view_form', form_id=form.id) | tojson }},
+        draftKey: 'dtoc-draft-{{ form.id }}-{{ session.username | urlencode }}',
     });
-
-    async function submitForm(e) {
-        e.preventDefault();
-        const formEl = document.getElementById('submissionForm');
-        if (!formEl.reportValidity()) return;
-
-        const formData = new FormData(formEl);
-        const submission = {};
-
-        fields.forEach(f => {
-            if (f.type === 'checkbox') {
-                submission[f.label] = formData.getAll(`${f.id}[]`);
-            } else {
-                submission[f.label] = formData.get(f.id);
-            }
-        });
-
-        try {
-            const btn = formEl.querySelector('button[type="submit"]');
-            btn.disabled = true;
-            btn.textContent = "Submitting...";
-
-            const res = await fetch("{{ url_for('forms.view_form', form_id=form.id) }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(submission)
-            });
-
-            if (res.ok) {
-                // Show success screen inside the card
-                document.querySelector('.max-w-3xl').innerHTML = `
-                    <div class="gf-card gf-top-card p-8 mt-8">
-                        <h1 class="text-3xl font-normal text-gray-900 mb-4">{{ form.title }}</h1>
-                        <p class="text-gray-700 mb-6">Your response has been recorded.</p>
-                        <a href="javascript:window.location.reload()" class="text-blue-600 hover:underline text-sm">Submit another response</a>
-                    </div>
-                `;
-            } else {
-                alert("Failed to submit form.");
-                btn.disabled = false;
-                btn.textContent = "Submit";
-            }
-        } catch (err) {
-            alert("Error submitting form.");
-        }
-    }
+});
 </script>
 {% endblock %}

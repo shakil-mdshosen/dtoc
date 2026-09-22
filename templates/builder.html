@@ -1,470 +1,161 @@
 {% extends "base.html" %}
+{% block title %}{% if existing_form %}Edit · {{ existing_form.title }}{% else %}Create form{% endif %} · DTOC Forms{% endblock %}
 
-{% block extra_head %}
-<!-- Icons -->
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-<style>
-    /* Google Forms aesthetic styles */
-    .gf-card {
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
-        margin-bottom: 24px;
-        transition: box-shadow 0.2s;
-    }
-    .gf-card.active {
-        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
-        border-left: 4px solid #4285f4;
-    }
-    .gf-top-card {
-        border-top: 10px solid #673ab7;
-    }
-    .gf-input-title {
-        font-family: "Google Sans", Roboto, Arial, sans-serif;
-        font-size: 24pt;
-        border: none;
-        border-bottom: 1px solid #e0e0e0;
-        border-radius: 0;
-        padding: 8px 0;
-        background: transparent;
-    }
-    .gf-input-title:focus {
-        outline: none;
-        border-bottom: 2px solid #673ab7;
-        padding-bottom: 7px;
-    }
-    .gf-input-question {
-        font-size: 16px;
-        font-weight: 500;
-        border: none;
-        background: #f8f9fa;
-        padding: 16px;
-        border-bottom: 1px solid #70757a;
-        width: 100%;
-        border-radius: 4px 4px 0 0;
-    }
-    .gf-input-question:focus {
-        outline: none;
-        border-bottom: 2px solid #673ab7;
-        background: #f1f3f4;
-    }
-    .rich-editor {
-        min-height: 72px;
-        border: 1px solid transparent;
-        border-radius: 6px;
-        padding: 10px 12px;
-        font-size: 14px;
-        color: #4b5563;
-        line-height: 1.5;
-    }
-    .rich-editor:focus {
-        outline: none;
-        border-color: #d1d5db;
-        background: #f9fafb;
-    }
-    .rich-editor:empty:before {
-        content: attr(data-placeholder);
-        color: #9ca3af;
-    }
-    .toolbar-btn {
-        border: 1px solid #e5e7eb;
-        border-radius: 9999px;
-        padding: 6px;
-        color: #4b5563;
-        line-height: 1;
-    }
-    .toolbar-btn:hover {
-        background: #f3f4f6;
-    }
-</style>
+{% block fullwidth %}
+<div class="builder-bar">
+    <div class="container">
+        <a href="{{ url_for('forms.dashboard') }}" class="btn btn-ghost btn-icon" aria-label="Back to my forms" title="Back to my forms"><svg class="icon"><use href="#i-left"></use></svg></a>
+        <div style="min-width:0">
+            <div class="truncate" style="font-weight:700" id="barTitle">{% if existing_form %}{{ existing_form.title }}{% else %}Untitled form{% endif %}</div>
+            <div class="save-state" id="saveState">{% if existing_form %}All changes saved{% else %}New form{% endif %}</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="tabs" role="tablist" aria-label="Builder views">
+            <button type="button" class="tab" role="tab" aria-selected="true" data-view="questions"><svg class="icon icon-sm"><use href="#i-list"></use></svg>Questions</button>
+            <button type="button" class="tab" role="tab" aria-selected="false" data-view="settings"><svg class="icon icon-sm"><use href="#i-settings"></use></svg>Settings</button>
+            <button type="button" class="tab" role="tab" aria-selected="false" data-view="preview"><svg class="icon icon-sm"><use href="#i-eye"></use></svg>Preview</button>
+        </div>
+        {% if not existing_form %}
+        <button type="button" class="btn btn-ghost" data-open-dialog="templatesDialog"><svg class="icon icon-sm"><use href="#i-sparkle"></use></svg><span>Templates</span></button>
+        {% endif %}
+        <button type="submit" form="builderForm" class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-check"></use></svg>{% if existing_form %}Save changes{% else %}Publish form{% endif %}</button>
+    </div>
+</div>
 {% endblock %}
 
 {% block content %}
-<div class="w-full max-w-3xl mx-auto py-4 sm:py-8 px-2 sm:px-0">
-    <form method="POST" action="{% if existing_form %}{{ url_for('forms.edit_form', form_id=existing_form.id) }}{% else %}{{ url_for('forms.builder') }}{% endif %}" id="builderForm">
-        <!-- Title Card -->
-        <div class="gf-card gf-top-card p-5 sm:p-8" onclick="setActive(this)">
-            <div id="headerImagePreviewWrapper" class="hidden mb-5">
-                <img id="headerImagePreview" alt="Header preview" class="w-full max-h-56 object-cover rounded-lg border border-gray-200">
-            </div>
-            <input type="text" name="title" id="formTitle" placeholder="Untitled form" required class="gf-input-title w-full mb-4">
-            <input type="url" id="formHeaderImage" placeholder="Header image URL (https://...)" class="w-full text-sm text-gray-600 border-none focus:ring-0 px-0 bg-transparent border-b border-transparent focus:border-gray-300 mb-2" oninput="handleHeaderImageUrlInput()">
-            <div class="mb-4">
-                <label for="formHeaderImageFile" class="block text-sm text-gray-600 mb-1">Or upload header image (PNG, JPEG, GIF, WEBP - max 2 MB)</label>
-                <input type="file" id="formHeaderImageFile" accept="image/png,image/jpeg,image/gif,image/webp" class="w-full text-sm text-gray-600" onchange="handleHeaderImageUpload(event)">
-            </div>
-            <div class="flex flex-wrap items-center gap-2 mb-2" onclick="event.stopPropagation()">
-                <button type="button" class="toolbar-btn" onclick="formatDescription('bold')" title="Bold"><span class="material-icons text-base">format_bold</span></button>
-                <button type="button" class="toolbar-btn" onclick="formatDescription('italic')" title="Italic"><span class="material-icons text-base">format_italic</span></button>
-                <button type="button" class="toolbar-btn" onclick="formatDescription('underline')" title="Underline"><span class="material-icons text-base">format_underlined</span></button>
-                <button type="button" class="toolbar-btn" onclick="formatDescription('strikeThrough')" title="Strikethrough"><span class="material-icons text-base">strikethrough_s</span></button>
-                <button type="button" class="toolbar-btn" onclick="formatDescription('insertUnorderedList')" title="Bulleted list"><span class="material-icons text-base">format_list_bulleted</span></button>
-                <button type="button" class="toolbar-btn" onclick="formatDescription('insertOrderedList')" title="Numbered list"><span class="material-icons text-base">format_list_numbered</span></button>
-                <button type="button" class="toolbar-btn" onclick="insertDescriptionLink()" title="Insert link"><span class="material-icons text-base">link</span></button>
-                <button type="button" class="toolbar-btn" onclick="formatDescription('removeFormat')" title="Clear formatting"><span class="material-icons text-base">format_clear</span></button>
-            </div>
-            <div id="formDescEditor" class="rich-editor" contenteditable="true" data-placeholder="Form description"></div>
-        </div>
-        
-        <input type="hidden" name="schema" id="schemaInput">
+<form method="POST" id="builderForm"
+      action="{% if existing_form %}{{ url_for('forms.edit_form', form_id=existing_form.id) }}{% else %}{{ url_for('forms.builder') }}{% endif %}">
+    <input type="hidden" name="title" id="titleInput">
+    <input type="hidden" name="schema" id="schemaInput">
+</form>
 
-        <div id="fieldsContainer">
-            <!-- Fields injected here -->
-        </div>
+<!-- Questions view -->
+<section data-panel="questions">
+    <div class="builder">
+        <aside class="palette-col">
+            <div class="card palette" id="palette"></div>
+        </aside>
+        <div id="canvas" data-accent="indigo">
+            <div class="card b-title-card">
+                <div class="fv-header-band"></div>
+                <div class="card-body">
+                    <div class="image-preview hidden" id="headerPreview">
+                        <img alt="Header image preview" id="headerPreviewImg">
+                        <button type="button" class="btn btn-sm" id="removeHeader"><svg class="icon icon-sm"><use href="#i-x"></use></svg>Remove</button>
+                    </div>
+                    <label class="sr-only" for="formTitle">Form title</label>
+                    <input type="text" id="formTitle" class="b-title" placeholder="Untitled form" maxlength="255" autocomplete="off">
+                    <div style="margin-top:14px">
+                        <div class="rich-toolbar" role="toolbar" aria-label="Description formatting">
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="bold" title="Bold"><svg class="icon icon-sm"><use href="#i-bold"></use></svg></button>
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="italic" title="Italic"><svg class="icon icon-sm"><use href="#i-italic"></use></svg></button>
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="underline" title="Underline"><svg class="icon icon-sm"><use href="#i-underline"></use></svg></button>
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="strikeThrough" title="Strikethrough"><svg class="icon icon-sm"><use href="#i-strike"></use></svg></button>
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="insertUnorderedList" title="Bulleted list"><svg class="icon icon-sm"><use href="#i-list"></use></svg></button>
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="insertOrderedList" title="Numbered list"><svg class="icon icon-sm"><use href="#i-list-ol"></use></svg></button>
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="link" title="Insert link"><svg class="icon icon-sm"><use href="#i-link"></use></svg></button>
+                            <button type="button" class="btn btn-ghost btn-icon" data-cmd="removeFormat" title="Clear formatting"><svg class="icon icon-sm"><use href="#i-eraser"></use></svg></button>
+                        </div>
+                        <div id="formDescEditor" class="rich-editor" contenteditable="true" data-placeholder="Describe your form — who it's for and how responses will be used"></div>
+                    </div>
+                    <div class="image-drop" style="margin-top:14px">
+                        <label class="btn btn-sm" for="headerFile"><svg class="icon icon-sm"><use href="#i-image"></use></svg>Upload header image</label>
+                        <input type="file" id="headerFile" accept="image/png,image/jpeg,image/gif,image/webp" class="sr-only">
+                        <span class="muted small">or</span>
+                        <input type="url" id="headerUrl" class="input input-sm" placeholder="Paste image URL (https://…)" style="flex:1;min-width:200px">
+                    </div>
+                </div>
+            </div>
 
-        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between sm:items-center mt-8">
-            <button type="button" onclick="addField()" class="w-full sm:w-auto justify-center flex items-center space-x-2 bg-white border border-gray-300 text-gray-700 px-4 py-2.5 rounded-full hover:bg-gray-50 shadow-sm">
-                <span class="material-icons">add</span>
-                <span class="font-medium">Add question</span>
-            </button>
-            
-            <button type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-6 rounded-md shadow">
-                {% if existing_form %}Save Changes{% else %}Save Form{% endif %}
-            </button>
-        </div>
-    </form>
-</div>
+            <div id="fields"></div>
 
+            <div class="b-add-between">
+                <button type="button" class="btn btn-soft" id="addQuestion"><svg class="icon icon-sm"><use href="#i-plus"></use></svg>Add question</button>
+            </div>
+        </div>
+    </div>
+    <button type="button" class="btn btn-primary btn-lg mobile-add" data-open-dialog="paletteDialog"><svg class="icon"><use href="#i-plus"></use></svg>Add question</button>
+</section>
+
+<!-- Settings view -->
+<section data-panel="settings" class="hidden">
+    <div class="container-narrow" style="margin:0 auto">
+        <div class="card">
+            <div class="card-header"><svg class="icon"><use href="#i-palette"></use></svg><h2 class="card-title">Appearance</h2></div>
+            <div class="card-body stack">
+                <div>
+                    <span class="label">Theme colour</span>
+                    <div class="swatches" id="swatches"></div>
+                </div>
+                <label class="switch"><input type="checkbox" id="setProgress"><span class="track"></span>Show progress bar</label>
+                <label class="switch"><input type="checkbox" id="setNumbers"><span class="track"></span>Number questions automatically</label>
+            </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+            <div class="card-header"><svg class="icon"><use href="#i-inbox"></use></svg><h2 class="card-title">Responses</h2></div>
+            <div class="card-body stack">
+                <label class="switch"><input type="checkbox" id="setOnce"><span class="track"></span>Limit to one response per Wikimedia account</label>
+                <div class="field-row">
+                    <div>
+                        <label class="label" for="setLimit">Maximum number of responses</label>
+                        <input type="number" min="1" id="setLimit" class="input" placeholder="Unlimited">
+                        <p class="hint">The form stops accepting responses once this is reached.</p>
+                    </div>
+                    <div>
+                        <label class="label" for="setCloseAt">Close automatically on (UTC)</label>
+                        <input type="datetime-local" id="setCloseAt" class="input">
+                        <p class="hint">Leave empty to keep the form open until you close it.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+            <div class="card-header"><svg class="icon"><use href="#i-check-circle"></use></svg><h2 class="card-title">After submission</h2></div>
+            <div class="card-body">
+                <label class="label" for="setConfirm">Confirmation message</label>
+                <textarea id="setConfirm" class="textarea" rows="3" placeholder="Your response has been recorded. Thank you!"></textarea>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Preview view -->
+<section data-panel="preview" class="hidden">
+    <div class="fv" id="previewWrap">
+        <div class="alert alert-info"><svg class="icon"><use href="#i-eye"></use></svg><div>This is a live preview. Logic, validation and pages work exactly as respondents will see them, but nothing is submitted.</div></div>
+        <div class="card fv-header">
+            <div class="fv-header-band"></div>
+            <img alt="" class="fv-header-image hidden" id="pvImage">
+            <div class="fv-header-body">
+                <h1 class="fv-title" id="pvTitle"></h1>
+                <div class="fv-desc rich" id="pvDesc"></div>
+            </div>
+        </div>
+        <div id="previewRoot"></div>
+    </div>
+</section>
+
+<dialog class="modal" id="paletteDialog" aria-labelledby="paletteDialogTitle">
+    <div class="modal-header"><h3 id="paletteDialogTitle">Add a question</h3><span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-icon" data-close-dialog aria-label="Close"><svg class="icon"><use href="#i-x"></use></svg></button></div>
+    <div class="modal-body" id="paletteMobile"></div>
+</dialog>
+
+<dialog class="modal modal-wide" id="templatesDialog" aria-labelledby="templatesTitle">
+    <div class="modal-header"><div><h3 id="templatesTitle">Start with a template</h3><p class="muted small">Pick a ready-made survey and customise it, or start from a blank form.</p></div><span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-icon" data-close-dialog aria-label="Close"><svg class="icon"><use href="#i-x"></use></svg></button></div>
+    <div class="modal-body"><div class="template-grid" id="templateGrid"></div></div>
+</dialog>
+
+<script type="application/json" id="initialSchema">{{ (schema_json or '') | tojson }}</script>
+<script type="application/json" id="initialTitle">{{ (existing_form.title if existing_form else (draft_title or '')) | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/form-runtime.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/builder.js') }}" defer></script>
 <script>
-    let fields = [];
-    let uploadedHeaderImageDataUrl = '';
-    const HEADER_IMAGE_MAX_SIZE_BYTES = 2 * 1024 * 1024;
-    const ALLOWED_HEADER_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-    const ALLOWED_DESC_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'ul', 'ol', 'li', 'blockquote', 'a']);
-    
-    function generateId() {
-        return 'field_' + Math.random().toString(36).substr(2, 9);
-    }
-
-    function setActive(el) {
-        document.querySelectorAll('.gf-card').forEach(c => c.classList.remove('active'));
-        if(el) el.classList.add('active');
-    }
-
-    function addField() {
-        const field = {
-            id: generateId(),
-            type: 'text',
-            label: 'Question',
-            required: false,
-            options: ['Option 1']
-        };
-        fields.push(field);
-        renderFields();
-    }
-
-    function removeField(id) {
-        fields = fields.filter(f => f.id !== id);
-        renderFields();
-    }
-
-    function updateField(id, key, value) {
-        const field = fields.find(f => f.id === id);
-        if (field) {
-            field[key] = value;
-            if (key === 'type') renderFields();
-        }
-    }
-
-    function addOption(id) {
-        const field = fields.find(f => f.id === id);
-        if (field && field.options) {
-            field.options.push(`Option ${field.options.length + 1}`);
-            renderFields();
-        }
-    }
-
-    function updateOption(id, index, value) {
-        const field = fields.find(f => f.id === id);
-        if (field && field.options) {
-            field.options[index] = value;
-        }
-    }
-
-    function removeOption(id, index) {
-        const field = fields.find(f => f.id === id);
-        if (field && field.options && field.options.length > 1) {
-            field.options.splice(index, 1);
-            renderFields();
-        }
-    }
-
-    function sanitizeUrl(url, allowMailTo = false) {
-        if (!url) return '';
-        const trimmed = url.trim();
-        try {
-            const parsed = new URL(trimmed);
-            const protocols = allowMailTo ? ['http:', 'https:', 'mailto:'] : ['http:', 'https:'];
-            return protocols.includes(parsed.protocol) ? trimmed : '';
-        } catch (_) {
-            return '';
-        }
-    }
-
-    function sanitizeDescriptionHtml(html) {
-        const template = document.createElement('template');
-        template.innerHTML = html || '';
-
-        const sanitizeNode = (node) => {
-            if (node.nodeType === Node.TEXT_NODE) return;
-            if (node.nodeType !== Node.ELEMENT_NODE) {
-                node.remove();
-                return;
-            }
-
-            const tagName = node.tagName.toLowerCase();
-            [...node.childNodes].forEach(sanitizeNode);
-            if (!ALLOWED_DESC_TAGS.has(tagName)) {
-                const fragment = document.createDocumentFragment();
-                while (node.firstChild) fragment.appendChild(node.firstChild);
-                node.replaceWith(fragment);
-                return;
-            }
-
-            const originalHref = tagName === 'a' ? node.getAttribute('href') : '';
-            [...node.attributes].forEach(attr => node.removeAttribute(attr.name));
-            if (tagName === 'a') {
-                const href = sanitizeUrl(originalHref, true);
-                if (href) {
-                    node.setAttribute('href', href);
-                    node.setAttribute('target', '_blank');
-                    node.setAttribute('rel', 'noopener noreferrer nofollow');
-                }
-            }
-
-        };
-
-        [...template.content.childNodes].forEach(sanitizeNode);
-        return template.innerHTML.trim();
-    }
-
-    function formatDescription(command) {
-        document.getElementById('formDescEditor').focus();
-        document.execCommand(command, false, null);
-    }
-
-    function insertDescriptionLink() {
-        const link = prompt('Enter URL (https://...)');
-        const safe = sanitizeUrl(link, true);
-        if (!safe) return;
-        document.getElementById('formDescEditor').focus();
-        document.execCommand('createLink', false, safe);
-    }
-
-    function updateHeaderPreview() {
-        const value = sanitizeUrl(document.getElementById('formHeaderImage').value);
-        const wrapper = document.getElementById('headerImagePreviewWrapper');
-        const image = document.getElementById('headerImagePreview');
-        const previewValue = uploadedHeaderImageDataUrl || value;
-        if (previewValue) {
-            image.src = previewValue;
-            wrapper.classList.remove('hidden');
-        } else {
-            image.removeAttribute('src');
-            wrapper.classList.add('hidden');
-        }
-    }
-
-    function handleHeaderImageUrlInput() {
-        const headerUrl = document.getElementById('formHeaderImage').value.trim();
-        if (headerUrl) {
-            uploadedHeaderImageDataUrl = '';
-            document.getElementById('formHeaderImageFile').value = '';
-        }
-        updateHeaderPreview();
-    }
-
-    function handleHeaderImageUpload(event) {
-        const fileInput = event.target;
-        const file = fileInput.files && fileInput.files[0];
-        if (!file) {
-            uploadedHeaderImageDataUrl = '';
-            updateHeaderPreview();
-            return;
-        }
-
-        if (!ALLOWED_HEADER_MIME_TYPES.has(file.type)) {
-            alert('Please upload a PNG, JPEG, GIF, or WEBP image.');
-            fileInput.value = '';
-            uploadedHeaderImageDataUrl = '';
-            updateHeaderPreview();
-            return;
-        }
-
-        if (file.size > HEADER_IMAGE_MAX_SIZE_BYTES) {
-            alert('Header image must be 2 MB or smaller.');
-            fileInput.value = '';
-            uploadedHeaderImageDataUrl = '';
-            updateHeaderPreview();
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                
-                // Max dimensions for header image
-                const MAX_WIDTH = 800;
-                
-                if (width > MAX_WIDTH) {
-                    height = Math.round((height * MAX_WIDTH) / width);
-                    width = MAX_WIDTH;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // Compress as jpeg with 0.5 quality to ensure it fits well under 1MB payload limits
-                uploadedHeaderImageDataUrl = canvas.toDataURL('image/jpeg', 0.5);
-                
-                document.getElementById('formHeaderImage').value = '';
-                updateHeaderPreview();
-            };
-            img.src = typeof reader.result === 'string' ? reader.result : '';
-        };
-        reader.onerror = () => {
-            alert('Failed to read the selected image.');
-            fileInput.value = '';
-            uploadedHeaderImageDataUrl = '';
-            updateHeaderPreview();
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function renderFields() {
-        const container = document.getElementById('fieldsContainer');
-        container.innerHTML = '';
-
-        fields.forEach(f => {
-            const card = document.createElement('div');
-            card.className = 'gf-card p-5 sm:p-8';
-            card.onclick = () => setActive(card);
-
-            let optionsHtml = '';
-            if (['radio', 'checkbox', 'dropdown'].includes(f.type)) {
-                optionsHtml = '<div class="mt-4 space-y-2">';
-                f.options.forEach((opt, idx) => {
-                    let icon = 'radio_button_unchecked';
-                    if (f.type === 'checkbox') icon = 'check_box_outline_blank';
-                    if (f.type === 'dropdown') icon = 'format_list_numbered';
-                    
-                    optionsHtml += `
-                        <div class="flex items-center space-x-3 group">
-                            <span class="material-icons text-gray-400">${icon}</span>
-                            <input type="text" value="${opt}" onchange="updateOption('${f.id}', ${idx}, this.value)" class="flex-1 border-none border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:ring-0 px-0 py-1 text-sm">
-                            <button type="button" onclick="removeOption('${f.id}', ${idx})" class="text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <span class="material-icons">close</span>
-                            </button>
-                        </div>
-                    `;
-                });
-                
-                let icon = 'radio_button_unchecked';
-                if (f.type === 'checkbox') icon = 'check_box_outline_blank';
-                if (f.type === 'dropdown') icon = 'format_list_numbered';
-                
-                optionsHtml += `
-                    <div class="flex items-center space-x-3 mt-2">
-                        <span class="material-icons text-gray-400">${icon}</span>
-                        <button type="button" onclick="addOption('${f.id}')" class="text-sm text-gray-500 hover:border-b hover:border-gray-300 py-1">Add option</button>
-                    </div>
-                </div>`;
-            }
-
-            let previewHtml = '';
-            if (f.type === 'text') previewHtml = '<div class="mt-4 border-b border-dotted border-gray-400 w-full sm:w-1/2 py-2 text-sm text-gray-400">Short answer text</div>';
-            if (f.type === 'textarea') previewHtml = '<div class="mt-4 border-b border-dotted border-gray-400 w-full py-2 text-sm text-gray-400">Long answer text</div>';
-            if (f.type === 'date') previewHtml = '<div class="mt-4 border-b border-dotted border-gray-400 w-full sm:w-1/3 py-2 text-sm text-gray-400 flex items-center justify-between"><span>Month, day, year</span><span class="material-icons text-gray-400">calendar_today</span></div>';
-
-            card.innerHTML = `
-                <div class="flex flex-col sm:flex-row sm:items-start sm:space-x-4 space-y-4 sm:space-y-0">
-                    <div class="flex-1 w-full">
-                        <input type="text" value="${f.label}" onchange="updateField('${f.id}', 'label', this.value)" placeholder="Question" class="gf-input-question w-full">
-                    </div>
-                    <div class="w-full sm:w-56">
-                        <select onchange="updateField('${f.id}', 'type', this.value)" class="block w-full pl-3 pr-10 py-3 text-sm sm:text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-gray-50 border">
-                            <option value="text" ${f.type === 'text' ? 'selected' : ''}>Short answer</option>
-                            <option value="textarea" ${f.type === 'textarea' ? 'selected' : ''}>Paragraph</option>
-                            <option value="radio" ${f.type === 'radio' ? 'selected' : ''}>Multiple choice</option>
-                            <option value="checkbox" ${f.type === 'checkbox' ? 'selected' : ''}>Checkboxes</option>
-                            <option value="dropdown" ${f.type === 'dropdown' ? 'selected' : ''}>Dropdown</option>
-                            <option value="date" ${f.type === 'date' ? 'selected' : ''}>Date</option>
-                        </select>
-                    </div>
-                </div>
-                ${optionsHtml}
-                ${previewHtml}
-                
-                <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end items-center space-x-4">
-                    <button type="button" onclick="removeField('${f.id}')" class="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100" title="Delete">
-                        <span class="material-icons">delete</span>
-                    </button>
-                    <div class="h-6 w-px bg-gray-300"></div>
-                    <label class="flex items-center space-x-2 cursor-pointer">
-                        <span class="text-sm font-medium text-gray-700">Required</span>
-                        <div class="relative">
-                            <input type="checkbox" ${f.required ? 'checked' : ''} onchange="updateField('${f.id}', 'required', this.checked)" class="sr-only peer">
-                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                        </div>
-                    </label>
-                </div>
-            `;
-            container.appendChild(card);
-        });
-    }
-
-    document.getElementById('builderForm').onsubmit = function(e) {
-        const descriptionHtml = sanitizeDescriptionHtml(document.getElementById('formDescEditor').innerHTML);
-        const schema = {
-            description_html: descriptionHtml,
-            description: document.getElementById('formDescEditor').innerText.trim(),
-            header_image_url: uploadedHeaderImageDataUrl || sanitizeUrl(document.getElementById('formHeaderImage').value),
-            fields: fields
-        };
-        document.getElementById('schemaInput').value = JSON.stringify(schema);
-    };
-
-    // Initialization
-    {% if schema_json %}
-    try {
-        const schema = JSON.parse({{ schema_json | tojson | safe }});
-        if (schema.fields && schema.fields.length > 0) {
-            fields = schema.fields;
-        } else {
-            addField();
-        }
-        
-        // Populate Title
-        const titleInput = document.getElementById('formTitle');
-        {% if existing_form %}
-        titleInput.value = {{ existing_form.title | tojson | safe }};
-        {% endif %}
-        
-        // Populate Description HTML
-        if (schema.description_html) {
-            document.getElementById('formDescEditor').innerHTML = schema.description_html;
-        }
-        
-        // Populate Header Image
-        if (schema.header_image_url) {
-            uploadedHeaderImageDataUrl = schema.header_image_url;
-            updateHeaderPreview();
-        }
-        
-        renderFields();
-    } catch (e) {
-        console.error("Error loading existing schema", e);
-        addField();
-    }
-    {% else %}
-    // Add first field by default
-    addField();
-    {% endif %}
+    window.BUILDER_IS_NEW = {{ 'false' if existing_form or schema_json else 'true' }};
 </script>
 {% endblock %}

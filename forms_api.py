@@ -8,6 +8,12 @@ from functools import wraps
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
+from datetime import datetime
+
+from form_schema import (
+    prepare_schema, validate_submission, sanitize_fields, sanitize_settings,
+    summarize, column_headers, format_value, input_fields,
+)
 
 forms_bp = Blueprint('forms', __name__)
 HEADER_IMAGE_MAX_BYTES = 2 * 1024 * 1024
@@ -144,7 +150,70 @@ def sanitize_schema(raw_schema):
         schema['header_image_url'] = header_image_url
     else:
         schema.pop('header_image_url', None)
-    return schema
+    schema['fields'] = sanitize_fields(schema.get('fields'))
+    schema['settings'] = sanitize_settings(schema.get('settings'))
+    allowed = {'description_html', 'description', 'header_image_url', 'fields', 'settings'}
+    return {k: v for k, v in schema.items() if k in allowed}
+
+
+def load_schema(form):
+    try:
+        raw = json.loads(form.schema) if form.schema else {}
+    except (TypeError, ValueError):
+        raw = {}
+    return prepare_schema(raw)
+
+
+def load_data(submission):
+    try:
+        data = json.loads(submission.data)
+    except (TypeError, ValueError):
+        return {}
+    if isinstance(data, dict) and isinstance(data.get('data'), dict):
+        data = data['data']
+    return data if isinstance(data, dict) else {}
+
+
+def get_permission(form_id, admin=False):
+    query = Permission.query.filter_by(form_id=form_id, username=session.get('username'))
+    if admin:
+        query = query.filter_by(role='admin')
+    return query.first()
+
+
+def can_manage(form, admin=False):
+    return bool(get_permission(form.id, admin=admin)) or is_owner_user(session.get('username'))
+
+
+def enforce_close_date(form, schema):
+    """Close a form automatically once its scheduled close date has passed."""
+    close_at = schema['settings'].get('close_at')
+    if not (form.is_active and close_at):
+        return
+    try:
+        deadline = datetime.fromisoformat(close_at)
+    except ValueError:
+        return
+    if datetime.utcnow() >= deadline:
+        form.is_active = False
+        form.closed_at = deadline
+        db.session.add(AuditLog(action='AUTO_CLOSE_FORM', details=f"Form {form.id} closed on schedule"))
+        db.session.commit()
+
+
+def availability(form, schema):
+    """Return a reason string when the form can't take a response from this user."""
+    enforce_close_date(form, schema)
+    if not form.is_active:
+        return 'closed'
+    settings = schema['settings']
+    limit = settings.get('response_limit')
+    if limit and Submission.query.filter_by(form_id=form.id).count() >= limit:
+        return 'limit'
+    if settings.get('one_response_per_user') and Submission.query.filter_by(
+            form_id=form.id, submitted_by=session.get('username')).first():
+        return 'responded'
+    return None
 
 
 def escape_like_pattern(value):
@@ -176,80 +245,104 @@ def owner_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def _save_form_from_request(form=None):
+    """Create or update a form from the builder POST. Returns (form, error)."""
+    title = (request.form.get('title') or '').strip()[:255]
+    raw_schema = request.form.get('schema')
+    try:
+        parsed_schema = json.loads(raw_schema) if raw_schema else {}
+    except json.JSONDecodeError:
+        return None, "Invalid form data. Please try again."
+    if not title:
+        return None, "Please give your form a title."
+    clean_schema = sanitize_schema(parsed_schema)
+    if form is None:
+        form = Form(title=title, schema=json.dumps(clean_schema), created_by=session['username'])
+        db.session.add(form)
+    else:
+        form.title = title
+        form.schema = json.dumps(clean_schema)
+    return form, None
+
+
 @forms_bp.route('/builder', methods=['GET', 'POST'])
 @login_required
 def builder():
     if request.method == 'POST':
-        title = request.form.get('title')
-        schema = request.form.get('schema')
-        try:
-            parsed_schema = json.loads(schema) if schema else {}
-        except json.JSONDecodeError:
-            flash("Invalid form data. Please try again.", "danger")
-            return render_template('builder.html'), 400
-        clean_schema = sanitize_schema(parsed_schema)
-        
-        new_form = Form(title=title, schema=json.dumps(clean_schema), created_by=session['username'])
-        db.session.add(new_form)
+        new_form, error = _save_form_from_request()
+        if error:
+            flash(error, "danger")
+            return render_template('builder.html', schema_json=request.form.get('schema') or '{}',
+                                   draft_title=request.form.get('title', '')), 400
         db.session.commit()
-        
-        # Add admin permission for the creator
-        perm = Permission(form_id=new_form.id, username=session['username'], role='admin')
-        
-        # Log action
-        log = AuditLog(action='CREATE_FORM', details=f"Form {new_form.id} created by {session['username']}")
-        
-        db.session.add(perm)
-        db.session.add(log)
+
+        db.session.add(Permission(form_id=new_form.id, username=session['username'], role='admin'))
+        db.session.add(AuditLog(action='CREATE_FORM', details=f"Form {new_form.id} created by {session['username']}"))
         db.session.commit()
-        
-        flash("Form created successfully!", "success")
-        return redirect(url_for('forms.dashboard'))
-        
+
+        flash("Form created! Share the link below to start collecting responses.", "success")
+        return redirect(url_for('forms.form_share', form_id=new_form.id))
+
     return render_template('builder.html')
+
 
 @forms_bp.route('/form/<int:form_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_form(form_id):
     form = Form.query.get_or_404(form_id)
-    perm = Permission.query.filter_by(form_id=form.id, username=session['username'], role='admin').first()
-    if not perm:
+    if not can_manage(form, admin=True):
         flash("You don't have permission to edit this form.", "danger")
         return redirect(url_for('forms.dashboard'))
-        
+
     if request.method == 'POST':
-        title = request.form.get('title')
-        schema = request.form.get('schema')
-        try:
-            parsed_schema = json.loads(schema) if schema else {}
-        except json.JSONDecodeError:
-            flash("Invalid form data. Please try again.", "danger")
-            return render_template('builder.html', existing_form=form, schema_json=form.schema), 400
-            
-        clean_schema = sanitize_schema(parsed_schema)
-        
-        form.title = title
-        form.schema = json.dumps(clean_schema)
-        
-        log = AuditLog(action='EDIT_FORM', details=f"Form {form.id} edited by {session['username']}")
-        db.session.add(log)
+        _, error = _save_form_from_request(form)
+        if error:
+            db.session.rollback()
+            flash(error, "danger")
+            return render_template('builder.html', existing_form=form,
+                                   schema_json=json.dumps(load_schema(form))), 400
+        db.session.add(AuditLog(action='EDIT_FORM', details=f"Form {form.id} edited by {session['username']}"))
         db.session.commit()
-        
         flash("Form updated successfully!", "success")
         return redirect(url_for('forms.dashboard'))
-        
-    return render_template('builder.html', existing_form=form, schema_json=form.schema)
+
+    return render_template('builder.html', existing_form=form, schema_json=json.dumps(load_schema(form)))
+
+
+@forms_bp.route('/form/<int:form_id>/share')
+@login_required
+def form_share(form_id):
+    form = Form.query.get_or_404(form_id)
+    if not can_manage(form):
+        flash("You don't have permission to manage this form.", "danger")
+        return redirect(url_for('forms.dashboard'))
+    return render_template('form_share.html', form=form,
+                           form_url=url_for('forms.view_form', form_id=form.id, _external=True))
+
 
 @forms_bp.route('/form/<int:form_id>', methods=['GET', 'POST'])
 @login_required
 def view_form(form_id):
     form = Form.query.get_or_404(form_id)
-    if not form.is_active:
-        return render_template('form_closed.html', form=form)
-        
+    schema = load_schema(form)
+    reason = availability(form, schema)
+
     if request.method == 'POST':
-        # form.io submits data as json
-        data = request.json
+        if reason:
+            messages = {
+                'closed': "This form is closed.",
+                'limit': "This form has reached its response limit.",
+                'responded': "You have already responded to this form.",
+            }
+            return jsonify({"status": "error", "message": messages[reason]}), 409
+        payload = request.get_json(silent=True) or {}
+        answers = payload.get('answers') if isinstance(payload, dict) else None
+        if not isinstance(answers, dict):
+            return jsonify({"status": "error", "message": "Invalid submission."}), 400
+        data, errors = validate_submission(schema, answers)
+        if errors:
+            return jsonify({"status": "error", "message": "Please fix the highlighted answers.",
+                            "errors": errors}), 400
         submission = Submission(
             form_id=form.id,
             data=json.dumps(data),
@@ -258,22 +351,40 @@ def view_form(form_id):
         db.session.add(submission)
         db.session.commit()
         return jsonify({"status": "success", "message": "Submission received"}), 201
-        
+
+    if reason:
+        return render_template('form_closed.html', form=form, reason=reason)
     permissions = Permission.query.filter_by(form_id=form.id).all()
-    return render_template('form_view.html', form=form, permissions=permissions)
+    return render_template('form_view.html', form=form, schema=schema, permissions=permissions,
+                           can_edit=can_manage(form, admin=True))
+
+
+def _response_counts(form_ids):
+    if not form_ids:
+        return {}
+    rows = (
+        db.session.query(Submission.form_id, db.func.count(Submission.id), db.func.max(Submission.submitted_at))
+        .filter(Submission.form_id.in_(form_ids))
+        .group_by(Submission.form_id)
+        .all()
+    )
+    return {form_id: {'count': count, 'last': last} for form_id, count, last in rows}
+
 
 @forms_bp.route('/dashboard')
 @login_required
 def dashboard():
-    # User's forms
     perms = Permission.query.filter_by(username=session['username']).all()
-    form_ids = [p.form_id for p in perms]
-    forms = Form.query.filter(Form.id.in_(form_ids)).all()
-    
-    # Create a mapping of form_id to role for easy template access
     roles = {p.form_id: p.role for p in perms}
-    
-    return render_template('dashboard.html', forms=forms, roles=roles)
+    forms = (Form.query.filter(Form.id.in_(list(roles))).order_by(Form.created_at.desc()).all()
+             if roles else [])
+    stats = _response_counts([f.id for f in forms])
+    totals = {
+        'forms': len(forms),
+        'active': sum(1 for f in forms if f.is_active),
+        'responses': sum(s['count'] for s in stats.values()),
+    }
+    return render_template('dashboard.html', forms=forms, roles=roles, stats=stats, totals=totals)
 
 
 @forms_bp.route('/owner/dashboard')
@@ -313,136 +424,200 @@ def owner_dashboard():
             'title': form.title,
             'created_at': form.created_at,
             'closed_at': form.closed_at,
+            'is_active': form.is_active,
             'total_responses': total_responses,
             'form_url': url_for('forms.view_form', form_id=form.id, _external=True),
             'form_id': form.id,
         }
         for form, total_responses in records
     ]
+    totals = {
+        'forms': len(rows),
+        'active': sum(1 for r in rows if r['is_active']),
+        'responses': sum(r['total_responses'] for r in rows),
+        'creators': len({r['creator'] for r in rows}),
+    }
 
     return render_template(
         'owner_dashboard.html',
         rows=rows,
+        totals=totals,
         creator_filter=creator_filter,
         title_filter=title_filter,
         status_filter=status_filter
     )
 
+
 @forms_bp.route('/form/<int:form_id>/close', methods=['POST'])
 @login_required
 def close_form(form_id):
     form = Form.query.get_or_404(form_id)
-    
-    perm = Permission.query.filter_by(form_id=form.id, username=session['username'], role='admin').first()
-    if not perm:
+    if not can_manage(form, admin=True):
         flash("You don't have permission to close this form.", "danger")
         return redirect(url_for('forms.dashboard'))
-        
+
     form.is_active = False
-    from datetime import datetime
     form.closed_at = datetime.utcnow()
-    
-    log = AuditLog(action='CLOSE_FORM', details=f"Form {form.id} closed by {session['username']}")
-    db.session.add(log)
+    db.session.add(AuditLog(action='CLOSE_FORM', details=f"Form {form.id} closed by {session['username']}"))
     db.session.commit()
-    
+
     flash("Form closed. Data will be retained for 90 days.", "info")
-    return redirect(url_for('forms.dashboard'))
+    return redirect(request.referrer or url_for('forms.dashboard'))
+
 
 @forms_bp.route('/form/<int:form_id>/reopen', methods=['POST'])
 @login_required
 def reopen_form(form_id):
     form = Form.query.get_or_404(form_id)
-    perm = Permission.query.filter_by(form_id=form.id, username=session['username'], role='admin').first()
-    if not perm:
+    if not can_manage(form, admin=True):
         flash("You don't have permission to reopen this form.", "danger")
         return redirect(url_for('forms.dashboard'))
-        
+
     form.is_active = True
     form.closed_at = None
-    
-    log = AuditLog(action='REOPEN_FORM', details=f"Form {form.id} reopened by {session['username']}")
-    db.session.add(log)
+    # A past schedule would immediately close the form again, so clear it.
+    schema = load_schema(form)
+    close_at = schema['settings'].get('close_at')
+    if close_at and datetime.fromisoformat(close_at) <= datetime.utcnow():
+        schema['settings']['close_at'] = ''
+        form.schema = json.dumps(schema)
+    db.session.add(AuditLog(action='REOPEN_FORM', details=f"Form {form.id} reopened by {session['username']}"))
     db.session.commit()
-    
+
     flash("Form successfully reopened.", "success")
+    return redirect(request.referrer or url_for('forms.dashboard'))
+
+
+@forms_bp.route('/form/<int:form_id>/duplicate', methods=['POST'])
+@login_required
+def duplicate_form(form_id):
+    form = Form.query.get_or_404(form_id)
+    if not can_manage(form):
+        flash("You don't have permission to duplicate this form.", "danger")
+        return redirect(url_for('forms.dashboard'))
+
+    copy = Form(title=f"Copy of {form.title}"[:255], schema=form.schema, created_by=session['username'])
+    db.session.add(copy)
+    db.session.commit()
+    db.session.add(Permission(form_id=copy.id, username=session['username'], role='admin'))
+    db.session.add(AuditLog(action='DUPLICATE_FORM',
+                            details=f"Form {form.id} duplicated as {copy.id} by {session['username']}"))
+    db.session.commit()
+    flash("Form duplicated. You can now edit the copy.", "success")
+    return redirect(url_for('forms.edit_form', form_id=copy.id))
+
+
+@forms_bp.route('/form/<int:form_id>/delete', methods=['POST'])
+@login_required
+def delete_form(form_id):
+    form = Form.query.get_or_404(form_id)
+    if not can_manage(form, admin=True):
+        flash("You don't have permission to delete this form.", "danger")
+        return redirect(url_for('forms.dashboard'))
+
+    Submission.query.filter_by(form_id=form.id).delete()
+    Permission.query.filter_by(form_id=form.id).delete()
+    db.session.add(AuditLog(action='DELETE_FORM',
+                            details=f"Form {form.id} ({form.title}) deleted by {session['username']}"))
+    db.session.delete(form)
+    db.session.commit()
+    flash("Form and all of its responses were deleted.", "info")
     return redirect(url_for('forms.dashboard'))
+
 
 @forms_bp.route('/form/<int:form_id>/submissions')
 @login_required
 def view_submissions(form_id):
     form = Form.query.get_or_404(form_id)
-    perm = Permission.query.filter_by(form_id=form.id, username=session['username']).first()
+    perm = get_permission(form.id)
     if not perm:
         flash("You don't have permission to view these submissions.", "danger")
         return redirect(url_for('forms.dashboard'))
-        
+
+    schema = load_schema(form)
     submissions = Submission.query.filter_by(form_id=form.id).order_by(Submission.submitted_at.desc()).all()
-    # Also fetch collaborators for management if admin
-    collaborators = []
+    datas = [load_data(sub) for sub in submissions]
+    headers = column_headers(schema, datas)
+    rows = [
+        {
+            'id': sub.id,
+            'submitted_at': sub.submitted_at,
+            'submitted_by': sub.submitted_by,
+            'cells': [format_value(data.get(h)) for h in headers],
+        }
+        for sub, data in zip(submissions, datas)
+    ]
+    daily = {}
+    for sub in submissions:
+        day = sub.submitted_at.strftime('%Y-%m-%d')
+        daily[day] = daily.get(day, 0) + 1
+
     is_admin = perm.role == 'admin'
-    if is_admin:
-        collaborators = Permission.query.filter_by(form_id=form.id).all()
-        
-    return render_template('submissions.html', form=form, submissions=submissions, is_admin=is_admin, collaborators=collaborators)
+    collaborators = Permission.query.filter_by(form_id=form.id).all() if is_admin else []
+
+    return render_template(
+        'submissions.html', form=form, schema=schema, submissions=submissions,
+        headers=headers, rows=rows, summary=summarize(schema, datas),
+        daily=sorted(daily.items())[-30:], question_count=len(input_fields(schema)),
+        is_admin=is_admin, collaborators=collaborators,
+    )
+
 
 @forms_bp.route('/api/form/<int:form_id>/submission/<int:sub_id>', methods=['DELETE'])
 @login_required
 def delete_submission(form_id, sub_id):
-    perm = Permission.query.filter_by(form_id=form_id, username=session['username']).first()
-    if not perm:
+    if not get_permission(form_id):
         return jsonify({"error": "Unauthorized"}), 403
-        
+
     sub = Submission.query.get_or_404(sub_id)
     if sub.form_id != form_id:
         return jsonify({"error": "Bad request"}), 400
-        
+
     db.session.delete(sub)
-    log = AuditLog(action='DELETE_SUBMISSION', details=f"Submission {sub_id} from Form {form_id} deleted by {session['username']}")
-    db.session.add(log)
+    db.session.add(AuditLog(action='DELETE_SUBMISSION',
+                            details=f"Submission {sub_id} from Form {form_id} deleted by {session['username']}"))
     db.session.commit()
     return jsonify({"status": "success"})
+
 
 @forms_bp.route('/api/form/<int:form_id>/collaborator', methods=['POST'])
 @login_required
 def add_collaborator(form_id):
-    perm = Permission.query.filter_by(form_id=form_id, username=session['username'], role='admin').first()
-    if not perm:
+    if not get_permission(form_id, admin=True):
         return jsonify({"error": "Only admins can add collaborators"}), 403
-        
-    username = request.json.get('username')
+
+    payload = request.get_json(silent=True) or {}
+    username = (payload.get('username') or '').strip()[:255]
     if not username:
         return jsonify({"error": "Username required"}), 400
-        
-    existing = Permission.query.filter_by(form_id=form_id, username=username).first()
-    if existing:
+
+    if Permission.query.filter_by(form_id=form_id, username=username).first():
         return jsonify({"error": "User is already a collaborator"}), 400
-        
-    new_perm = Permission(form_id=form_id, username=username, role='viewer')
-    db.session.add(new_perm)
-    log = AuditLog(action='ADD_COLLABORATOR', details=f"Collaborator {username} added to Form {form_id} by {session['username']}")
-    db.session.add(log)
+
+    db.session.add(Permission(form_id=form_id, username=username, role='viewer'))
+    db.session.add(AuditLog(action='ADD_COLLABORATOR',
+                            details=f"Collaborator {username} added to Form {form_id} by {session['username']}"))
     db.session.commit()
-    
+
     return jsonify({"status": "success", "username": username, "role": "viewer"})
+
 
 @forms_bp.route('/api/form/<int:form_id>/collaborator/<username>', methods=['DELETE'])
 @login_required
 def remove_collaborator(form_id, username):
-    perm = Permission.query.filter_by(form_id=form_id, username=session['username'], role='admin').first()
-    if not perm:
+    if not get_permission(form_id, admin=True):
         return jsonify({"error": "Only admins can remove collaborators"}), 403
-        
+
     target_perm = Permission.query.filter_by(form_id=form_id, username=username).first()
     if not target_perm:
         return jsonify({"error": "Collaborator not found"}), 404
-        
+
     if target_perm.role == 'admin' and target_perm.username == session['username']:
         return jsonify({"error": "Cannot remove yourself as admin"}), 400
-        
+
     db.session.delete(target_perm)
-    log = AuditLog(action='REMOVE_COLLABORATOR', details=f"Collaborator {username} removed from Form {form_id} by {session['username']}")
-    db.session.add(log)
+    db.session.add(AuditLog(action='REMOVE_COLLABORATOR',
+                            details=f"Collaborator {username} removed from Form {form_id} by {session['username']}"))
     db.session.commit()
-    
+
     return jsonify({"status": "success"})

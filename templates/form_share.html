@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Share · {{ form.title }}{% endblock %}
+{% block container_class2 %}container-narrow{% endblock %}
+
+{% block content %}
+<div class="card" style="overflow:hidden">
+    <div class="fv-header-band"></div>
+    <div class="card-body">
+        <div class="fv-done-icon" style="margin:0 0 18px"><svg class="icon"><use href="#i-check"></use></svg></div>
+        <div class="eyebrow">Ready to share</div>
+        <h1 style="font-size:26px;margin-top:6px">{{ form.title }}</h1>
+        <p class="muted" style="margin-top:6px">Anyone with a Wikimedia account can respond using this link.</p>
+
+        <label class="label" for="shareUrl" style="margin-top:22px">Form link</label>
+        <div class="share-box">
+            <input id="shareUrl" class="input" value="{{ form_url }}" readonly onclick="this.select()">
+            <button type="button" class="btn btn-primary" data-copy="{{ form_url }}"><svg class="icon icon-sm"><use href="#i-copy"></use></svg>Copy</button>
+        </div>
+
+        <label class="label" for="wikiText" style="margin-top:18px">Wikitext for on-wiki announcements</label>
+        <div class="share-box">
+            <input id="wikiText" class="input" value="[{{ form_url }} {{ form.title }}]" readonly onclick="this.select()">
+            <button type="button" class="btn" data-copy="[{{ form_url }} {{ form.title }}]"><svg class="icon icon-sm"><use href="#i-copy"></use></svg>Copy</button>
+        </div>
+    </div>
+    <div class="card-footer row row-wrap">
+        <a href="{{ url_for('forms.view_form', form_id=form.id) }}" target="_blank" rel="noopener" class="btn btn-soft"><svg class="icon icon-sm"><use href="#i-eye"></use></svg>Open form</a>
+        <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="btn btn-ghost"><svg class="icon icon-sm"><use href="#i-edit"></use></svg>Keep editing</a>
+        <div class="spacer"></div>
+        <a href="{{ url_for('forms.dashboard') }}" class="btn btn-ghost">Go to my forms<svg class="icon icon-sm"><use href="#i-right"></use></svg></a>
+    </div>
+</div>
+{% endblock %}

@@ -3,63 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DTOC Form Collection</title>
-    <meta name="theme-color" content="#2563eb">
+    <title>{% block title %}DTOC Forms{% endblock %}</title>
+    <meta name="theme-color" content="#4f46e5">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    <!-- Use Tailwind CSS via CDN for rapid styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        /* Apply the saved theme before first paint to avoid a flash. */
+        try { var t = localStorage.getItem('dtoc-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-gradient-to-b from-slate-50 to-gray-100 min-h-screen font-sans text-gray-900 flex flex-col">
-    <nav class="bg-blue-600 shadow-md sticky top-0 z-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-0">
-            <div class="flex flex-col gap-3 sm:h-16 sm:flex-row sm:justify-between sm:items-center">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <a href="{{ url_for('home') }}" class="flex-shrink-0 flex items-center text-white font-bold text-xl tracking-tight">
-                        DTOC Forms
-                    </a>
-                    <div class="flex flex-wrap items-center gap-2 sm:ml-8">
-                        {% if session.get('username') %}
-                            <a href="{{ url_for('forms.dashboard') }}" class="text-white/95 hover:bg-blue-500 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
-                            <a href="{{ url_for('forms.builder') }}" class="text-white/95 hover:bg-blue-500 px-3 py-2 rounded-md text-sm font-medium">Create Form</a>
-                            {% if is_owner %}
-                                <a href="{{ url_for('forms.owner_dashboard') }}" class="text-white/95 hover:bg-blue-500 px-3 py-2 rounded-md text-sm font-medium">Owner Dashboard</a>
-                            {% endif %}
-                        {% endif %}
+<body>
+    {% include '_icons.html' %}
+    {% set endpoint = request.endpoint or '' %}
+    <header class="topbar">
+        <div class="container topbar-inner">
+            <a href="{{ url_for('home') }}" class="brand">
+                <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg></span>
+                DTOC Forms
+            </a>
+            {% if session.get('username') %}
+            <nav class="nav" aria-label="Main">
+                <a href="{{ url_for('forms.dashboard') }}" class="{% if endpoint == 'forms.dashboard' %}active{% endif %}">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-grid"></use></svg>My forms
+                </a>
+                <a href="{{ url_for('forms.builder') }}" class="{% if endpoint == 'forms.builder' %}active{% endif %}">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-plus"></use></svg>Create form
+                </a>
+                {% if is_owner %}
+                <a href="{{ url_for('forms.owner_dashboard') }}" class="{% if endpoint == 'forms.owner_dashboard' %}active{% endif %}">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-shield"></use></svg>Owner dashboard
+                </a>
+                {% endif %}
+            </nav>
+            {% endif %}
+            <div class="spacer"></div>
+            <button type="button" class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle dark mode" aria-label="Toggle dark mode">
+                <svg class="icon" aria-hidden="true"><use href="#i-moon"></use></svg>
+            </button>
+            {% if session.get('username') %}
+                <details class="menu">
+                    <summary class="btn btn-ghost user-chip" aria-label="Account menu">
+                        <span class="avatar">{{ session.get('username')[:1] }}</span>
+                        <span class="truncate">{{ session.get('username') }}</span>
+                    </summary>
+                    <div class="menu-panel">
+                        <div class="menu-item muted small" style="cursor:default">Signed in as <strong>{{ session.get('username') }}</strong></div>
+                        <div class="menu-sep"></div>
+                        <a class="menu-item" href="{{ url_for('forms.dashboard') }}"><svg class="icon icon-sm"><use href="#i-grid"></use></svg>My forms</a>
+                        <a class="menu-item" href="{{ url_for('auth.logout') }}"><svg class="icon icon-sm"><use href="#i-logout"></use></svg>Log out</a>
                     </div>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 sm:gap-4">
-                    {% if session.get('username') %}
-                        <span class="text-white/95 text-sm sm:text-base break-words">Welcome, {{ session.get('username') }}</span>
-                        <a href="{{ url_for('auth.logout') }}" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-md text-sm font-medium">Logout</a>
-                    {% else %}
-                        <a href="{{ url_for('auth.login') }}" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-md text-sm font-medium">Login with Wikimedia</a>
-                    {% endif %}
-                </div>
-            </div>
+                </details>
+                <button type="button" class="btn btn-ghost btn-icon nav-toggle" aria-label="Open menu" aria-expanded="false">
+                    <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
+                </button>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-user"></use></svg>Log in with Wikimedia
+                </a>
+            {% endif %}
         </div>
-    </nav>
+    </header>
 
-    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex-1 w-full">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
+    <main class="page">
+        <div class="container {% block container_class %}{% endblock %}">
+            {% with messages = get_flashed_messages(with_categories=true) %}
                 {% for category, message in messages %}
-                    <div class="p-4 mb-4 text-sm border {% if category == 'success' %}text-green-800 bg-green-50 border-green-200{% elif category == 'danger' %}text-red-800 bg-red-50 border-red-200{% else %}text-blue-800 bg-blue-50 border-blue-200{% endif %} rounded-lg" role="alert">
-                        {{ message }}
+                    {% set kind = category if category in ['success', 'danger', 'warning'] else 'info' %}
+                    <div class="alert alert-{{ kind }}" role="alert">
+                        <svg class="icon" aria-hidden="true"><use href="#i-{{ {'success': 'check-circle', 'danger': 'alert', 'warning': 'alert'}.get(kind, 'info') }}"></use></svg>
+                        <div>{{ message }}</div>
+                        <button type="button" class="alert-close" aria-label="Dismiss"><svg class="icon icon-sm"><use href="#i-x"></use></svg></button>
                     </div>
                 {% endfor %}
-            {% endif %}
-        {% endwith %}
-        
-        {% block content %}{% endblock %}
+            {% endwith %}
+        </div>
+        {% block fullwidth %}{% endblock %}
+        <div class="container {% block container_class2 %}{% endblock %}">
+            {% block content %}{% endblock %}
+        </div>
     </main>
-    <footer class="border-t border-gray-200 bg-white/80 py-4 mt-8">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-gray-600">
-            Developed by
-            <a href="https://meta.wikimedia.org/wiki/User:MdsShakil" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 font-medium">
-                Shakil Hosen
-            </a>
+
+    <footer class="footer">
+        <div class="container">
+            <span>DTOC Forms &middot; Privacy-friendly surveys for Wikimedia communities, hosted on Toolforge</span>
+            <span>Developed by
+                <a href="https://meta.wikimedia.org/wiki/User:MdsShakil" target="_blank" rel="noopener noreferrer">Shakil Hosen</a>
+            </span>
         </div>
     </footer>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
