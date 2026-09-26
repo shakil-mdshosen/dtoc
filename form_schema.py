@@ -190,6 +190,7 @@ def sanitize_settings(raw):
         'close_at': close_at,
         'show_progress': raw.get('show_progress', True) is not False,
         'show_question_numbers': _bool(raw.get('show_question_numbers')),
+        'collect_email': _bool(raw.get('collect_email')),
     }
 
 

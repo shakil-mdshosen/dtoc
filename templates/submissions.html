@@ -134,6 +134,7 @@
                     <tr>
                         <th>Submitted</th>
                         <th>Respondent</th>
+                        {% if show_email %}<th title="Confirmed email on the respondent's Wikimedia account">Wikimedia email</th>{% endif %}
                         {% for h in headers %}<th title="{{ h }}"><span class="table-cell-clip" style="display:inline-block;max-width:220px">{{ h }}</span></th>{% endfor %}
                         <th></th>
                     </tr>
@@ -143,6 +144,7 @@
                     <tr id="sub-{{ row.id }}" data-id="{{ row.id }}" style="cursor:pointer">
                         <td class="muted" style="white-space:nowrap">{{ row.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td style="white-space:nowrap"><strong>{{ row.submitted_by or 'Anonymous' }}</strong></td>
+                        {% if show_email %}<td style="white-space:nowrap">{% if row.submitted_email %}<a href="mailto:{{ row.submitted_email }}" onclick="event.stopPropagation()">{{ row.submitted_email }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>{% endif %}
                         {% for v in row.cells %}<td class="table-cell-clip" title="{{ v }}">{{ v }}</td>{% endfor %}
                         <td style="white-space:nowrap">
                             <button type="button" class="btn btn-ghost btn-icon btn-sm" data-view-sub="{{ row.id }}" aria-label="View response"><svg class="icon icon-sm"><use href="#i-eye"></use></svg></button>
@@ -206,7 +208,7 @@
     <div class="modal-body"><dl class="response-detail" id="respBody" style="margin:0"></dl></div>
 </dialog>
 
-<script type="application/json" id="respData">{{ {'headers': headers, 'rows': rows | map(attribute='id') | list, 'values': rows | map(attribute='cells') | list, 'who': rows | map(attribute='submitted_by') | list, 'when': rows | map(attribute='submitted_at') | map('string') | list} | tojson }}</script>
+<script type="application/json" id="respData">{{ {'headers': headers, 'rows': rows | map(attribute='id') | list, 'values': rows | map(attribute='cells') | list, 'who': rows | map(attribute='submitted_by') | list, 'emails': rows | map(attribute='submitted_email') | list, 'when': rows | map(attribute='submitted_at') | map('string') | list} | tojson }}</script>
 {% endblock %}
 
 {% block scripts %}
@@ -228,7 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (index < 0 || index >= data.rows.length) return;
         currentIndex = index;
         document.getElementById('respTitle').textContent = `Response ${data.rows.length - index} of ${data.rows.length}`;
-        document.getElementById('respMeta').textContent = `${data.who[index] || 'Anonymous'} · ${String(data.when[index]).slice(0, 16)} UTC`;
+        const email = data.emails[index] ? ` · ${data.emails[index]}` : '';
+        document.getElementById('respMeta').textContent = `${data.who[index] || 'Anonymous'}${email} · ${String(data.when[index]).slice(0, 16)} UTC`;
         document.getElementById('respBody').innerHTML = data.headers.map((h, i) => {
             const v = data.values[index][i];
             return `<dt>${esc(h)}</dt><dd>${v === '' || v == null ? '<span class="muted">No answer</span>' : esc(v)}</dd>`;

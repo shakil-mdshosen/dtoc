@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Privacy notice · DTOC Forms{% endblock %}
+{% block container_class2 %}container-narrow{% endblock %}
+
+{#
+  Privacy notice for DTOC Forms. Keep this in sync with what the code actually
+  collects (auth.py, forms_api.py, models.py, janitor.py, static/js/*.js).
+  Update "Last updated" whenever the content changes.
+#}
+
+{% block content %}
+<article class="card privacy">
+    <div class="fv-header-band"></div>
+    <div class="card-body">
+        <div class="eyebrow">Privacy notice</div>
+        <h1 style="font-size:28px;margin-top:6px">How DTOC Forms handles your data</h1>
+        <p class="muted" style="margin-top:6px">Last updated: 26 September 2026</p>
+
+        <div class="alert alert-info" style="margin-top:18px">
+            <svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg>
+            <div>
+                DTOC Forms is a volunteer-run tool hosted on
+                <a href="https://wikitech.wikimedia.org/wiki/Portal:Toolforge" target="_blank" rel="noopener noreferrer">Wikimedia Toolforge</a>.
+                It is <strong>not operated by the Wikimedia Foundation</strong>, and the Foundation's privacy policy does not cover it.
+                Use of this tool is subject to the
+                <a href="https://wikitech.wikimedia.org/wiki/Wikitech:Cloud_Services_Terms_of_use" target="_blank" rel="noopener noreferrer">Wikimedia Cloud Services Terms of Use</a>.
+            </div>
+        </div>
+
+        <h2>Who runs this tool</h2>
+        <p>DTOC Forms is maintained by
+            <a href="https://meta.wikimedia.org/wiki/User:MdsShakil" target="_blank" rel="noopener noreferrer">Shakil Hosen (User:MdsShakil)</a>.
+            Each form is created and managed by the Wikimedia user named on the form (the <em>form creator</em>), together with any
+            <em>collaborators</em> they add. The form creator decides what the form asks and how responses are used.</p>
+
+        <h2>What we collect</h2>
+        <h3>When you log in</h3>
+        <ul>
+            <li><strong>Your Wikimedia username</strong>, received from Meta-Wiki through OAuth. This is required to use the tool.</li>
+            <li><strong>Your email address and whether it is confirmed</strong>, if your account has one. The tool's OAuth permission lets it
+                read these (and your real name, which the tool does not read or store). A <em>confirmed</em> email is kept in your login session
+                so that forms which collect email can use it. It is only saved permanently if you respond to a form that collects email (see below).</li>
+        </ul>
+        <p>Your login session is kept in a signed cookie in your browser and ends when you log out or close your browser.
+            The tool never sees your Wikimedia password and cannot edit wikis on your behalf.</p>
+
+        <h3>When you respond to a form</h3>
+        <ul>
+            <li>Your <strong>answers</strong> to the form's questions.</li>
+            <li>Your <strong>Wikimedia username</strong> and the <strong>date and time</strong> of your response. Anonymous responses are not possible.</li>
+            <li>Your <strong>confirmed Wikimedia email address</strong>, but <strong>only if the form says it collects email</strong>.
+                Such forms show a notice with the exact address before you answer. If your account has no confirmed email, you cannot respond to them.</li>
+        </ul>
+
+        <h3>When you create or manage a form</h3>
+        <ul>
+            <li>The form's content and settings, your username as creator, and the usernames of collaborators you add.</li>
+            <li>An <strong>audit log</strong> of management actions, such as creating, editing, closing, exporting or deleting a form,
+                and adding or removing collaborators, with the username of the person who acted.</li>
+        </ul>
+
+        <h3>Stored only in your browser</h3>
+        <ul>
+            <li>While you fill in a form, your answers are saved as a <strong>draft in your browser's local storage</strong> so a refresh doesn't lose them.
+                Drafts are not sent to the server until you press Submit, and are removed after you submit or press "Clear form".</li>
+            <li>Your light/dark theme preference.</li>
+        </ul>
+
+        <h3>What we don't collect</h3>
+        <ul>
+            <li>No analytics, advertising or tracking. The tool loads no third-party scripts, fonts or images; everything is served from Toolforge.</li>
+            <li>The tool does not store your IP address or browser details in its database. The Toolforge infrastructure may keep standard
+                web server logs, as described in the Cloud Services Terms of Use.</li>
+        </ul>
+
+        <h2>Who can see your data</h2>
+        <ul>
+            <li><strong>The form creator and collaborators</strong> can see every response to their form, including usernames, times and,
+                for forms that collect it, email addresses. They can download responses as CSV, Excel or JSON files.
+                <strong>Once downloaded, those files are the form managers' responsibility</strong> and are no longer covered by the deletion schedule below.</li>
+            <li>The <strong>tool maintainer</strong> can see a list of all forms, their creators and response counts, and has technical access to the
+                tool's database as its operator. This access is used only to run, secure and troubleshoot the tool.</li>
+            <li>Other respondents cannot see your answers. The list of users with access to a form is shown on the form itself.</li>
+            <li>Your data is not sold or shared with anyone else, except where required by law or the Cloud Services Terms of Use.</li>
+        </ul>
+
+        <h2>How long we keep it</h2>
+        <ul>
+            <li>Responses are kept while a form is open. <strong>90 days after a form is closed, all its responses (including any collected
+                email addresses) are permanently deleted</strong> automatically. If a form is reopened, this countdown starts again when it is next closed.</li>
+            <li>Form managers can delete individual responses, or a whole form with all its responses, at any time. Deletion is immediate.</li>
+            <li>Form definitions and the audit log are kept after responses are deleted so that form activity remains accountable.</li>
+            <li>Drafts in your browser stay until you submit, clear the form, or clear your browser's site data.</li>
+        </ul>
+
+        <h2>Your choices</h2>
+        <ul>
+            <li>You can choose not to respond to a form, for example if it collects your email address.</li>
+            <li>To have a response corrected or deleted, contact the form creator shown on the form. If they don't respond, contact the tool maintainer.</li>
+            <li>You can revoke the tool's access to your Wikimedia account at any time at
+                <a href="https://meta.wikimedia.org/wiki/Special:OAuthManageMyGrants" target="_blank" rel="noopener noreferrer">Special:OAuthManageMyGrants</a> on Meta-Wiki.
+                This does not delete responses you have already submitted.</li>
+        </ul>
+
+        <h2>Contact</h2>
+        <p>Questions about a specific form: contact its creator. Questions about the tool or this notice: leave a message on
+            <a href="https://meta.wikimedia.org/wiki/User_talk:MdsShakil" target="_blank" rel="noopener noreferrer">User talk:MdsShakil</a> on Meta-Wiki.</p>
+
+        <h2>Changes to this notice</h2>
+        <p>If the tool starts collecting different data, this page will be updated before the change takes effect, and the date above will change.</p>
+    </div>
+</article>
+{% endblock %}

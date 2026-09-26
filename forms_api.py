@@ -213,6 +213,8 @@ def availability(form, schema):
     if settings.get('one_response_per_user') and Submission.query.filter_by(
             form_id=form.id, submitted_by=session.get('username')).first():
         return 'responded'
+    if settings.get('collect_email') and not session.get('email'):
+        return 'email_required'
     return None
 
 
@@ -368,6 +370,7 @@ def view_form(form_id):
                 'closed': "This form is closed.",
                 'limit': "This form has reached its response limit.",
                 'responded': "You have already responded to this form.",
+                'email_required': "This form requires a confirmed email address on your Wikimedia account.",
             }
             return jsonify({"status": "error", "message": messages[reason]}), 409
         payload = request.get_json(silent=True) or {}
@@ -381,12 +384,18 @@ def view_form(form_id):
         submission = Submission(
             form_id=form.id,
             data=json.dumps(data),
-            submitted_by=session.get('username')
+            submitted_by=session.get('username'),
+            submitted_email=session.get('email') if schema['settings'].get('collect_email') else None,
         )
         db.session.add(submission)
         db.session.commit()
         return jsonify({"status": "success", "message": "Submission received"}), 201
 
+    if reason == 'email_required':
+        from auth import login_url
+        return render_template('email_required.html', form=form,
+                               recheck_url=login_url(request.path),
+                               checked=session.get('email_checked', False)), 403
     if reason:
         return render_template('form_closed.html', form=form, reason=reason)
     permissions = Permission.query.filter_by(form_id=form.id).all()
@@ -578,6 +587,7 @@ def view_submissions(form_id):
             'id': sub.id,
             'submitted_at': sub.submitted_at,
             'submitted_by': sub.submitted_by,
+            'submitted_email': sub.submitted_email,
             'cells': [format_value(data.get(h)) for h in headers],
         }
         for sub, data in zip(submissions, datas)
@@ -595,6 +605,7 @@ def view_submissions(form_id):
         headers=headers, rows=rows, summary=summarize(schema, datas),
         daily=sorted(daily.items())[-30:], question_count=len(input_fields(schema)),
         is_admin=is_admin, collaborators=collaborators,
+        show_email=bool(schema['settings'].get('collect_email') or any(s.submitted_email for s in submissions)),
     )
 
 

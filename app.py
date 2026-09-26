@@ -1,6 +1,6 @@
 from flask import Flask, render_template, session
 from config import Config
-from models import db
+from models import db, ensure_schema_upgrades
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -20,6 +20,10 @@ def create_app(config_class=Config):
     def home():
         return render_template('home.html')
 
+    @app.route('/privacy')
+    def privacy():
+        return render_template('privacy.html')
+
     @app.context_processor
     def inject_owner_flag():
         from auth import login_url
@@ -27,6 +31,7 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
+        ensure_schema_upgrades()
 
     return app
 

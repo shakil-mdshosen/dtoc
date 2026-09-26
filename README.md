@@ -14,6 +14,7 @@ The **DTOC (Data Retention & Form Collection)** tool is a modernized, mobile-res
 - **Conditional logic:** Show a question or an entire section only when an earlier answer *is / is not / contains / is greater than / is less than / is (not) answered*.
 - **Validation:** Required answers, min/max length, number ranges, min/max selections, "Other" options, option shuffling. All rules are enforced on the server as well as in the browser.
 - **Form settings:** Theme colour, one response per account, response limit, scheduled auto-close, custom confirmation message, question numbering.
+- **Optional email collection:** Form managers can choose to collect each respondent's confirmed Wikimedia email address (read from the OAuth profile — the consumer's grant must include access to email). Respondents are told on the form; users without a confirmed email are asked to add and confirm one on Meta-Wiki before they can respond. Emails appear in results and exports and are deleted with the responses.
 - **Builder UX:** Question palette, drag-and-drop reordering, duplicate/move/delete, paste multiple lines to create options, live preview, `Ctrl+S` to save, and ready-made templates (event registration, feedback survey, scholarship application, community consultation, volunteer sign-up).
 - **Respondent UX:** Answers autosave in the browser so a refresh doesn't lose progress; errors are shown inline next to the question.
 - **Rich media:** Rich-text description and header image (upload is compressed client-side).

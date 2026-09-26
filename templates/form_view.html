@@ -24,6 +24,13 @@
                 {% endif %}
                 <span><svg class="icon icon-sm"><use href="#i-info"></use></svg><span class="req">*</span>&nbsp;Required</span>
             </div>
+            {% if schema.settings.collect_email %}
+            <div class="alert alert-info" style="margin:16px 0 0">
+                <svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg>
+                <div>This form collects your confirmed Wikimedia email address, <strong>{{ session.email }}</strong>.
+                It will be shared with the people who manage this form along with your response.</div>
+            </div>
+            {% endif %}
         </div>
         <details class="disclosure" style="border-top:1px solid var(--border)">
             <summary><svg class="icon icon-sm"><use href="#i-shield"></use></svg>Privacy notice &amp; disclaimer<svg class="icon icon-sm chev"><use href="#i-down"></use></svg></summary>
@@ -31,6 +38,9 @@
                 <div class="notice-grid">
                     <div class="notice"><svg class="icon icon-sm"><use href="#i-clock"></use></svg><div><div class="notice-title">Data retention</div>Responses are stored for <strong>90 days after the form is closed</strong>, then permanently deleted in line with Wikimedia data-minimization principles.</div></div>
                     <div class="notice"><svg class="icon icon-sm"><use href="#i-shield"></use></svg><div><div class="notice-title">Intended use</div>This form is for <strong>Wikimedia project-related purposes only</strong>. Submissions for unrelated purposes will be removed.</div></div>
+                    {% if schema.settings.collect_email %}
+                    <div class="notice"><svg class="icon icon-sm"><use href="#i-mail"></use></svg><div><div class="notice-title">Email collection</div>Your <strong>confirmed Wikimedia email address</strong> is stored with your response and visible to the form's managers.</div></div>
+                    {% endif %}
                     <div class="notice"><svg class="icon icon-sm"><use href="#i-user"></use></svg><div><div class="notice-title">Form creator</div><span class="chip">{{ form.created_by }}</span></div></div>
                     {% if permissions %}
                     <div class="notice"><svg class="icon icon-sm"><use href="#i-users"></use></svg><div><div class="notice-title">Users with access</div>
@@ -39,7 +49,7 @@
                         </div></div></div>
                     {% endif %}
                 </div>
-                <p class="xsmall muted" style="margin-top:12px">Your response is associated with your Wikimedia account. For questions, contact the form creator.</p>
+                <p class="xsmall muted" style="margin-top:12px">Your response is associated with your Wikimedia account. For questions, contact the form creator. See the <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">privacy notice</a> for how your data is handled.</p>
             </div>
         </details>
     </div>

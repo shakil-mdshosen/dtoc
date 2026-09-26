@@ -728,6 +728,7 @@
     $('setProgress').checked = s.show_progress !== false;
     $('setNumbers').checked = !!s.show_question_numbers;
     $('setOnce').checked = !!s.one_response_per_user;
+    $('setEmail').checked = !!s.collect_email;
     $('setLimit').value = s.response_limit || '';
     $('setCloseAt').value = s.close_at || '';
     $('setConfirm').value = s.confirmation_message || '';
@@ -746,6 +747,7 @@
     bind('setProgress', 'show_progress', el => el.checked);
     bind('setNumbers', 'show_question_numbers', el => el.checked);
     bind('setOnce', 'one_response_per_user', el => el.checked);
+    bind('setEmail', 'collect_email', el => el.checked);
     bind('setLimit', 'response_limit', el => (el.value ? parseInt(el.value, 10) : null));
     bind('setCloseAt', 'close_at', el => el.value);
     bind('setConfirm', 'confirmation_message', el => el.value);

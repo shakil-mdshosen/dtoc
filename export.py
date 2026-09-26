@@ -21,8 +21,25 @@ def _load_export(form_id, action, label):
     db.session.add(AuditLog(action=action, details=f"Form {form.id} exported{label} by {session['username']}"))
     db.session.commit()
     datas = [load_data(sub) for sub in submissions]
-    headers = column_headers(load_schema(form), datas)
-    return form, (submissions, datas, headers)
+    schema = load_schema(form)
+    headers = column_headers(schema, datas)
+    return form, (submissions, datas, headers, includes_email(schema, submissions))
+
+
+def includes_email(schema, submissions):
+    """Show the email column if the form collects emails or older responses have one."""
+    return bool(schema['settings'].get('collect_email') or any(s.submitted_email for s in submissions))
+
+
+def _meta_headers(with_email):
+    return ['ID', 'Submitted At', 'Submitted By'] + (['Submitted Email'] if with_email else [])
+
+
+def _meta_row(sub, with_email):
+    row = [sub.id, sub.submitted_at.isoformat(), sub.submitted_by]
+    if with_email:
+        row.append(sub.submitted_email or '')
+    return row
 
 
 def _denied():
@@ -36,16 +53,16 @@ def export_csv(form_id):
     form, loaded = _load_export(form_id, 'EXPORT_CSV', '')
     if loaded is None:
         return _denied()
-    submissions, datas, headers = loaded
+    submissions, datas, headers, with_email = loaded
 
     si = StringIO()
     cw = csv.writer(si)
     if not submissions:
         cw.writerow(["No submissions found."])
     else:
-        cw.writerow(['ID', 'Submitted At', 'Submitted By'] + headers)
+        cw.writerow(_meta_headers(with_email) + headers)
         for sub, data in zip(submissions, datas):
-            row = [sub.id, sub.submitted_at.isoformat(), sub.submitted_by]
+            row = _meta_row(sub, with_email)
             row.extend(format_value(data.get(h, '')) for h in headers)
             cw.writerow(row)
 
@@ -62,15 +79,14 @@ def export_json(form_id):
     form, loaded = _load_export(form_id, 'EXPORT_JSON', ' as JSON')
     if loaded is None:
         return _denied()
-    submissions, datas, _ = loaded
+    submissions, datas, _, with_email = loaded
 
     output_data = [
-        {
-            "id": sub.id,
-            "submitted_at": sub.submitted_at.isoformat(),
-            "submitted_by": sub.submitted_by,
-            "data": data
-        }
+        dict(
+            {"id": sub.id, "submitted_at": sub.submitted_at.isoformat(), "submitted_by": sub.submitted_by},
+            **({"submitted_email": sub.submitted_email} if with_email else {}),
+            data=data,
+        )
         for sub, data in zip(submissions, datas)
     ]
 
@@ -87,7 +103,7 @@ def export_excel(form_id):
     form, loaded = _load_export(form_id, 'EXPORT_EXCEL', ' as Excel')
     if loaded is None:
         return _denied()
-    submissions, datas, field_headers = loaded
+    submissions, datas, field_headers, with_email = loaded
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -100,7 +116,7 @@ def export_excel(form_id):
     if not submissions:
         ws.append(["No submissions found."])
     else:
-        all_headers = ['ID', 'Submitted At', 'Submitted By'] + field_headers
+        all_headers = _meta_headers(with_email) + field_headers
         for col_idx, header in enumerate(all_headers, start=1):
             cell = ws.cell(row=1, column=col_idx, value=header)
             cell.font = header_font
@@ -111,7 +127,7 @@ def export_excel(form_id):
         ws.freeze_panes = "A2"
 
         for sub, data in zip(submissions, datas):
-            row = [sub.id, sub.submitted_at.isoformat(), sub.submitted_by]
+            row = _meta_row(sub, with_email)
             row.extend(format_value(data.get(h, '')) for h in field_headers)
             ws.append(row)
 
