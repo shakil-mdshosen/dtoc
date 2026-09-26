@@ -560,3 +560,16 @@ details.disclosure[open] > summary .chev { transform: rotate(180deg); }
 .privacy ul { margin: 6px 0 0; padding-left: 20px; }
 .privacy li { margin: 6px 0; color: var(--text-2); }
 .privacy p { color: var(--text-2); }
+
+/* ---------- Collaborators & username combobox ---------- */
+.collab-add { display: flex; gap: 10px; flex-wrap: wrap; }
+.collab-add .combo { flex: 1; min-width: 220px; }
+.combo { position: relative; }
+.combo-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 6px; list-style: none;
+  max-height: 280px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg);
+}
+.combo-list [role="option"] { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 14px; }
+.combo-list [role="option"] .avatar { width: 26px; height: 26px; font-size: 12px; }
+.combo-list [role="option"]:hover, .combo-list [role="option"][aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+.combo-empty { padding: 8px 10px; color: var(--muted); font-size: 13.5px; }

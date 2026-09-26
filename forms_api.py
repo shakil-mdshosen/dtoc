@@ -10,6 +10,7 @@ from html.parser import HTMLParser
 from urllib.parse import urlparse
 from datetime import datetime
 
+from wiki_users import LookupUnavailable, normalize_username, search_users, user_exists
 from form_schema import (
     prepare_schema, validate_submission, sanitize_fields, sanitize_settings,
     summarize, column_headers, format_value, input_fields,
@@ -185,6 +186,18 @@ def can_manage(form, admin=False):
     return bool(get_permission(form.id, admin=admin)) or is_owner_user(session.get('username'))
 
 
+# Collaborator roles. 'admin' is the form's owner (its creator); owners can add,
+# remove and switch 'editor' and 'viewer' collaborators.
+COLLABORATOR_ROLES = ('editor', 'viewer')
+ROLE_LABELS = {'admin': 'Owner', 'editor': 'Editor', 'viewer': 'Viewer'}
+
+
+def can_edit(form):
+    """Owners and editors can change the form's questions and settings."""
+    perm = get_permission(form.id)
+    return bool(perm and perm.role in ('admin', 'editor')) or is_owner_user(session.get('username'))
+
+
 def enforce_close_date(form, schema):
     """Close a form automatically once its scheduled close date has passed."""
     close_at = schema['settings'].get('close_at')
@@ -327,7 +340,7 @@ def builder():
 @login_required
 def edit_form(form_id):
     form = Form.query.get_or_404(form_id)
-    if not can_manage(form, admin=True):
+    if not can_edit(form):
         flash("You don't have permission to edit this form.", "danger")
         return redirect(url_for('forms.dashboard'))
 
@@ -400,7 +413,7 @@ def view_form(form_id):
         return render_template('form_closed.html', form=form, reason=reason)
     permissions = Permission.query.filter_by(form_id=form.id).all()
     return render_template('form_view.html', form=form, schema=schema, permissions=permissions,
-                           can_edit=can_manage(form, admin=True))
+                           can_edit=can_edit(form), role_labels=ROLE_LABELS)
 
 
 def _response_counts(form_ids):
@@ -599,12 +612,15 @@ def view_submissions(form_id):
 
     is_admin = perm.role == 'admin'
     collaborators = Permission.query.filter_by(form_id=form.id).all() if is_admin else []
+    order = {'admin': 0, 'editor': 1, 'viewer': 2}
+    collaborators.sort(key=lambda p: (order.get(p.role, 3), p.username.casefold()))
 
     return render_template(
         'submissions.html', form=form, schema=schema, submissions=submissions,
         headers=headers, rows=rows, summary=summarize(schema, datas),
         daily=sorted(daily.items())[-30:], question_count=len(input_fields(schema)),
         is_admin=is_admin, collaborators=collaborators,
+        can_edit=can_edit(form), role=perm.role, role_labels=ROLE_LABELS,
         show_email=bool(schema['settings'].get('collect_email') or any(s.submitted_email for s in submissions)),
     )
 
@@ -626,40 +642,114 @@ def delete_submission(form_id, sub_id):
     return jsonify({"status": "success"})
 
 
+def _role_from(payload, default='viewer'):
+    role = (payload.get('role') or default)
+    return role if role in COLLABORATOR_ROLES else None
+
+
+def _json_object():
+    """The request's JSON body if it is an object, else ``None``."""
+    payload = request.get_json(silent=True)
+    return payload if isinstance(payload, dict) else None
+
+
+def _find_collaborator(form_id, username):
+    """Permission for ``username`` on a form, also matching names stored before normalisation."""
+    perm = Permission.query.filter_by(form_id=form_id, username=username).first()
+    if perm:
+        return perm
+    wanted = normalize_username(username)
+    return next((p for p in Permission.query.filter_by(form_id=form_id)
+                 if normalize_username(p.username) == wanted), None)
+
+
+@forms_bp.route('/api/users/search')
+@login_required
+def search_wiki_users():
+    """Username suggestions from Meta-Wiki's global account list."""
+    try:
+        names = search_users(request.args.get('q', ''))
+    except LookupUnavailable:
+        return jsonify({"users": [], "error": "Suggestions are unavailable right now."}), 503
+    return jsonify({"users": names})
+
+
 @forms_bp.route('/api/form/<int:form_id>/collaborator', methods=['POST'])
 @login_required
 def add_collaborator(form_id):
     if not get_permission(form_id, admin=True):
-        return jsonify({"error": "Only admins can add collaborators"}), 403
+        return jsonify({"error": "Only the form owner can add collaborators"}), 403
 
-    payload = request.get_json(silent=True) or {}
-    username = (payload.get('username') or '').strip()[:255]
+    payload = _json_object()
+    if payload is None:
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+    username = normalize_username(payload.get('username'))
     if not username:
         return jsonify({"error": "Username required"}), 400
+    role = _role_from(payload)
+    if not role:
+        return jsonify({"error": "Role must be 'editor' or 'viewer'"}), 400
 
-    if Permission.query.filter_by(form_id=form_id, username=username).first():
-        return jsonify({"error": "User is already a collaborator"}), 400
+    if _find_collaborator(form_id, username):
+        return jsonify({"error": f"{username} is already a collaborator"}), 400
 
-    db.session.add(Permission(form_id=form_id, username=username, role='viewer'))
+    try:
+        if not user_exists(username):
+            return jsonify({"error": f"No Wikimedia account named \"{username}\" was found."}), 404
+        verified = True
+    except LookupUnavailable:
+        # Don't block owners when Meta-Wiki is unreachable; the name is still normalised.
+        verified = False
+
+    db.session.add(Permission(form_id=form_id, username=username, role=role))
     db.session.add(AuditLog(action='ADD_COLLABORATOR',
-                            details=f"Collaborator {username} added to Form {form_id} by {session['username']}"))
+                            details=f"Collaborator {username} ({role}) added to Form {form_id} by {session['username']}"))
     db.session.commit()
 
-    return jsonify({"status": "success", "username": username, "role": "viewer"})
+    return jsonify({"status": "success", "username": username, "role": role, "verified": verified})
+
+
+@forms_bp.route('/api/form/<int:form_id>/collaborator/<username>', methods=['PATCH'])
+@login_required
+def change_collaborator_role(form_id, username):
+    if not get_permission(form_id, admin=True):
+        return jsonify({"error": "Only the form owner can change roles"}), 403
+
+    payload = _json_object()
+    if payload is None:
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+    role = _role_from(payload, default='')
+    if not role:
+        return jsonify({"error": "Role must be 'editor' or 'viewer'"}), 400
+
+    target_perm = _find_collaborator(form_id, username)
+    if not target_perm:
+        return jsonify({"error": "Collaborator not found"}), 404
+    if target_perm.role == 'admin':
+        return jsonify({"error": "The form owner's role can't be changed"}), 400
+
+    if target_perm.role != role:
+        old = target_perm.role
+        target_perm.role = role
+        db.session.add(AuditLog(action='CHANGE_COLLABORATOR_ROLE',
+                                details=f"Collaborator {username} changed from {old} to {role} on Form {form_id} by {session['username']}"))
+        db.session.commit()
+
+    return jsonify({"status": "success", "username": username, "role": role})
 
 
 @forms_bp.route('/api/form/<int:form_id>/collaborator/<username>', methods=['DELETE'])
 @login_required
 def remove_collaborator(form_id, username):
     if not get_permission(form_id, admin=True):
-        return jsonify({"error": "Only admins can remove collaborators"}), 403
+        return jsonify({"error": "Only the form owner can remove collaborators"}), 403
 
-    target_perm = Permission.query.filter_by(form_id=form_id, username=username).first()
+    target_perm = _find_collaborator(form_id, username)
     if not target_perm:
         return jsonify({"error": "Collaborator not found"}), 404
 
-    if target_perm.role == 'admin' and target_perm.username == session['username']:
-        return jsonify({"error": "Cannot remove yourself as admin"}), 400
+    if target_perm.role == 'admin':
+        return jsonify({"error": "The form owner can't be removed"}), 400
 
     db.session.delete(target_perm)
     db.session.add(AuditLog(action='REMOVE_COLLABORATOR',
