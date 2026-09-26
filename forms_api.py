@@ -226,12 +226,38 @@ def is_owner_user(username):
     return bool(owner_username) and current_user.casefold() == owner_username.casefold()
 
 
+def _referrer_path():
+    """Path of the page that sent this request, if it was a page on this site."""
+    referrer = urlparse(request.referrer or '')
+    if referrer.netloc != request.host:
+        return None
+    return referrer.path + (f'?{referrer.query}' if referrer.query else '')
+
+
+def login_required_response():
+    """Ask an anonymous visitor to log in, remembering where they wanted to go."""
+    from auth import login_url, safe_next_url
+    if request.method == 'GET':
+        return render_template(
+            'login_required.html',
+            login_link=login_url(),
+            is_form=request.endpoint == 'forms.view_form',
+        ), 401
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify({"status": "error", "error": "Login required",
+                        "message": "Your session has expired. Please log in again.",
+                        "login_url": login_url(_referrer_path() or url_for('forms.dashboard'))}), 401
+    # A form POST (e.g. close/delete): send them back to the page they were on after login.
+    back = safe_next_url(_referrer_path())
+    flash("Please log in to continue.", "warning")
+    return redirect(login_url(back or url_for('forms.dashboard')))
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
-            flash("Please log in to access this page.", "warning")
-            return redirect(url_for('auth.login'))
+            return login_required_response()
         return f(*args, **kwargs)
     return decorated_function
 

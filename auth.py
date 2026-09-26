@@ -1,6 +1,6 @@
 from flask import Blueprint, session, redirect, request, url_for, flash
 from requests_oauthlib import OAuth2Session
-import os
+from urllib.parse import urlparse
 from config import Config
 
 auth_bp = Blueprint('auth', __name__)
@@ -10,9 +10,40 @@ TOKEN_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/access_token'
 PROFILE_URL = 'https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile'
 USER_AGENT = 'dtoc-toolforge/1.0 (https://dtoc.toolforge.org)'
 
+def safe_next_url(target):
+    """Return ``target`` if it is a path on this site, otherwise ``None``.
+
+    Only relative paths such as ``/form/12`` are accepted so the login flow
+    can't be abused as an open redirect to another website.
+    """
+    if not isinstance(target, str):
+        return None
+    target = target.strip()
+    if not target.startswith('/') or target.startswith('//') or '\\' in target:
+        return None
+    parsed = urlparse(target)
+    if parsed.scheme or parsed.netloc:
+        return None
+    return target
+
+
+def current_path():
+    """The path and query string of the current request, e.g. ``/form/12?x=1``."""
+    path = request.full_path
+    return path[:-1] if path.endswith('?') else path
+
+
+def login_url(next_path=None):
+    """URL of the login route that brings the user back to ``next_path`` afterwards."""
+    next_path = safe_next_url(next_path or current_path())
+    if not next_path or next_path.startswith(url_for('auth.login')):
+        return url_for('auth.login')
+    return url_for('auth.login', next=next_path)
+
+
 @auth_bp.route('/login')
 def login():
-    session['return_to'] = request.args.get('next', url_for('home'))
+    session['return_to'] = safe_next_url(request.args.get('next')) or url_for('home')
     
     redirect_uri = url_for('auth.oauth_callback', _external=True)
     if redirect_uri.startswith('http://'):
@@ -82,7 +113,7 @@ def oauth_callback():
         flash(f"OAuth login failed: {str(e)[:200]}", "danger")
         return redirect(url_for('home'))
         
-    return_to = session.pop('return_to', url_for('home'))
+    return_to = safe_next_url(session.pop('return_to', None)) or url_for('home')
     return redirect(return_to)
 
 @auth_bp.route('/logout')
