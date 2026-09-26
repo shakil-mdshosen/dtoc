@@ -20,6 +20,10 @@ def create_app(config_class=Config):
     def home():
         return render_template('home.html')
 
+    @app.route('/privacy')
+    def privacy():
+        return render_template('privacy.html')
+
     @app.context_processor
     def inject_owner_flag():
         from auth import login_url

@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import InternalError, OperationalError, ProgrammingError
 from datetime import datetime
 
 db = SQLAlchemy()
@@ -34,16 +35,36 @@ class AuditLog(db.Model):
     details = db.Column(db.Text, nullable=True)
 
 
+def _column_names(table):
+    """Current column names of ``table`` (fresh inspection, no cached metadata)."""
+    return {c['name'] for c in db.inspect(db.engine).get_columns(table)}
+
+
+def _add_column_if_missing(table, column, ddl):
+    """Add a column idempotently, tolerating another worker adding it concurrently.
+
+    Several uWSGI/Gunicorn workers may start at once and all see the column
+    missing. Only one ALTER can win; the others fail with a duplicate-column
+    error, so on failure we re-check and only re-raise if the column is still
+    absent (i.e. the error was something else).
+    """
+    if column in _column_names(table):
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(db.text(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}'))
+    except (OperationalError, ProgrammingError, InternalError):
+        if column not in _column_names(table):
+            raise
+
+
 def ensure_schema_upgrades():
     """Add columns introduced after a table was first created.
 
     ``db.create_all()`` creates missing tables but never alters existing ones,
     so the production database needs new nullable columns added explicitly.
+    Safe to run from every worker on startup.
     """
-    inspector = db.inspect(db.engine)
-    if 'submission' not in inspector.get_table_names():
+    if 'submission' not in db.inspect(db.engine).get_table_names():
         return
-    columns = {c['name'] for c in inspector.get_columns('submission')}
-    if 'submitted_email' not in columns:
-        with db.engine.begin() as conn:
-            conn.execute(db.text('ALTER TABLE submission ADD COLUMN submitted_email VARCHAR(255) NULL'))
+    _add_column_if_missing('submission', 'submitted_email', 'VARCHAR(255) NULL')

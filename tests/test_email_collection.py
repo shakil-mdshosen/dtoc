@@ -176,3 +176,32 @@ def test_existing_database_gets_email_column(tmp_path):
     assert 'submitted_email' in columns
     with engine.connect() as conn:
         assert conn.execute(text('SELECT submitted_by, submitted_email FROM submission')).one() == ('Old', None)
+
+
+def test_schema_upgrade_tolerates_column_added_by_another_worker(app, monkeypatch):
+    """Simulate a race: this worker saw the column missing, but another worker added it first."""
+    import models
+
+    with app.app_context():
+        real = models._column_names
+        calls = []
+
+        def stale_then_real(table):
+            calls.append(table)
+            # First check (before ALTER) is stale; the re-check after the failure is accurate.
+            return set() if len(calls) == 1 else real(table)
+
+        monkeypatch.setattr(models, '_column_names', stale_then_real)
+        models.ensure_schema_upgrades()  # ALTER fails with duplicate column; must not raise
+        assert len(calls) == 2
+        assert 'submitted_email' in real('submission')
+
+
+def test_schema_upgrade_reraises_unrelated_errors(app, monkeypatch):
+    import models
+    from sqlalchemy.exc import OperationalError
+
+    with app.app_context():
+        monkeypatch.setattr(models, '_column_names', lambda table: set())
+        with pytest.raises(OperationalError):
+            models.ensure_schema_upgrades()

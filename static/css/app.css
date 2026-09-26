@@ -553,3 +553,10 @@ details.disclosure[open] > summary .chev { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Privacy notice ---------- */
+.privacy h2 { font-size: 19px; margin: 30px 0 10px; }
+.privacy h3 { font-size: 15px; margin: 18px 0 6px; color: var(--text-2); }
+.privacy ul { margin: 6px 0 0; padding-left: 20px; }
+.privacy li { margin: 6px 0; color: var(--text-2); }
+.privacy p { color: var(--text-2); }
