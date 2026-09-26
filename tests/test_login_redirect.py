@@ -109,3 +109,15 @@ def test_expired_session_form_post_returns_to_previous_page(client):
     response = client.post('/form/1/close', headers={'Referer': 'http://localhost/form/1/submissions'})
     assert response.status_code == 302
     assert response.headers['Location'] == '/login?next=/form/1/submissions'
+
+
+def test_expired_session_submission_without_referer_returns_to_form(client):
+    response = client.post('/form/1', json={'answers': {}})
+    assert response.status_code == 401
+    assert response.get_json()['login_url'] == '/login?next=/form/1'
+
+
+def test_expired_session_api_call_without_referer_falls_back_to_dashboard(client):
+    response = client.delete('/api/form/1/submission/1')
+    assert response.status_code == 401
+    assert response.get_json()['login_url'] == '/login?next=/dashboard'

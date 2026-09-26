@@ -234,6 +234,15 @@ def _referrer_path():
     return referrer.path + (f'?{referrer.query}' if referrer.query else '')
 
 
+def _json_return_path():
+    """Where to send someone after re-login when a background request found them logged out."""
+    # A form submission is POSTed to the form's own URL, so return there directly;
+    # this works even when the browser doesn't send a Referer header.
+    if request.endpoint == 'forms.view_form':
+        return request.path
+    return _referrer_path() or url_for('forms.dashboard')
+
+
 def login_required_response():
     """Ask an anonymous visitor to log in, remembering where they wanted to go."""
     from auth import login_url, safe_next_url
@@ -246,7 +255,7 @@ def login_required_response():
     if request.is_json or request.path.startswith('/api/'):
         return jsonify({"status": "error", "error": "Login required",
                         "message": "Your session has expired. Please log in again.",
-                        "login_url": login_url(_referrer_path() or url_for('forms.dashboard'))}), 401
+                        "login_url": login_url(_json_return_path())}), 401
     # A form POST (e.g. close/delete): send them back to the page they were on after login.
     back = safe_next_url(_referrer_path())
     flash("Please log in to continue.", "warning")
