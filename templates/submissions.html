@@ -15,7 +15,7 @@
     <div class="row row-wrap">
         <button type="button" class="btn btn-ghost" data-copy="{{ url_for('forms.view_form', form_id=form.id, _external=True) }}"><svg class="icon icon-sm"><use href="#i-link"></use></svg>Copy link</button>
         <a href="{{ url_for('forms.view_form', form_id=form.id) }}" target="_blank" rel="noopener" class="btn btn-ghost"><svg class="icon icon-sm"><use href="#i-eye"></use></svg>Open</a>
-        {% if is_admin %}
+        {% if can_edit %}
         <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="btn"><svg class="icon icon-sm"><use href="#i-edit"></use></svg>Edit form</a>
         {% endif %}
         <details class="menu">
@@ -164,29 +164,55 @@
 {% if is_admin %}
 <!-- Collaborators -->
 <section data-tabpanel="access" class="hidden">
-    <div class="card" style="max-width:720px">
+    <div class="card" style="max-width:760px">
         <div class="card-header">
-            <div><h2 class="card-title">Collaborators</h2><p class="muted small">Collaborators can view results and export data.</p></div>
+            <div>
+                <h2 class="card-title">Collaborators</h2>
+                <p class="muted small">
+                    <strong>Editors</strong> can edit the form's questions and settings, view results and export data.
+                    <strong>Viewers</strong> can view results and export data.
+                    Only you, as the owner, can close or delete the form and manage collaborators.
+                </p>
+            </div>
         </div>
         <div class="card-body">
-            <form class="row" id="collabForm">
-                <label class="input-group" style="flex:1">
-                    <span class="sr-only">Wikimedia username</span>
-                    <svg class="icon icon-sm"><use href="#i-user"></use></svg>
-                    <input type="text" id="collaborator-username" class="input" placeholder="Wikimedia username" autocomplete="off">
-                </label>
+            <form class="collab-add" id="collabForm" autocomplete="off">
+                <div class="combo" id="userCombo">
+                    <label class="input-group">
+                        <span class="sr-only">Wikimedia username</span>
+                        <svg class="icon icon-sm"><use href="#i-search"></use></svg>
+                        <input type="text" id="collaborator-username" class="input" placeholder="Search Wikimedia username…"
+                               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="userSuggestions" spellcheck="false">
+                    </label>
+                    <ul class="combo-list hidden" id="userSuggestions" role="listbox" aria-label="Matching Wikimedia accounts"></ul>
+                </div>
+                <label class="sr-only" for="collaborator-role">Role</label>
+                <select id="collaborator-role" class="select" style="width:auto">
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                </select>
                 <button type="submit" class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-plus"></use></svg>Add</button>
             </form>
+            <p class="hint">Suggestions come from Wikimedia's global account list on Meta-Wiki.</p>
         </div>
         <table class="table">
-            <tbody>
+            <tbody id="collabRows">
             {% for perm in collaborators %}
-            <tr id="collab-{{ loop.index }}">
-                <td><span class="row" style="gap:10px"><span class="avatar">{{ perm.username[:1] }}</span><strong>{{ perm.username }}</strong></span></td>
-                <td>{% if perm.role == 'admin' %}<span class="badge badge-accent">Owner</span>{% else %}<span class="badge">Viewer</span>{% endif %}</td>
-                <td class="num">
+            <tr data-user="{{ perm.username }}">
+                <td><span class="row" style="gap:10px"><span class="avatar">{{ perm.username[:1] }}</span><strong>{{ perm.username }}</strong>{% if perm.username == session.username %} <span class="muted small">(you)</span>{% endif %}</span></td>
+                <td style="width:170px">
+                    {% if perm.role == 'admin' %}
+                    <span class="badge badge-accent">Owner</span>
+                    {% else %}
+                    <select class="select select-sm" data-role-for="{{ perm.username }}" aria-label="Role for {{ perm.username }}">
+                        <option value="viewer" {% if perm.role == 'viewer' %}selected{% endif %}>Viewer</option>
+                        <option value="editor" {% if perm.role == 'editor' %}selected{% endif %}>Editor</option>
+                    </select>
+                    {% endif %}
+                </td>
+                <td class="num" style="width:110px">
                     {% if perm.role != 'admin' %}
-                    <button type="button" class="btn btn-danger-ghost btn-sm" data-remove-collab="{{ perm.username }}" data-row="collab-{{ loop.index }}">Remove</button>
+                    <button type="button" class="btn btn-danger-ghost btn-sm" data-remove-collab="{{ perm.username }}">Remove</button>
                     {% endif %}
                 </td>
             </tr>
@@ -274,27 +300,105 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     {% if is_admin %}
+    const collabUrl = (user) => `/api/form/${formId}/collaborator` + (user ? `/${encodeURIComponent(user)}` : '');
+    const input = document.getElementById('collaborator-username');
+    const list = document.getElementById('userSuggestions');
+    let active = -1, timer = null, controller = null;
+
+    function closeList() {
+        list.classList.add('hidden');
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        active = -1;
+    }
+    function highlight(i) {
+        const items = [...list.querySelectorAll('[role="option"]')];
+        if (!items.length) return;
+        active = (i + items.length) % items.length;
+        items.forEach((el, n) => el.setAttribute('aria-selected', String(n === active)));
+        input.setAttribute('aria-activedescendant', items[active].id);
+        items[active].scrollIntoView({ block: 'nearest' });
+    }
+    function choose(name) { input.value = name; closeList(); document.getElementById('collaborator-role').focus(); }
+    function showItems(names, message) {
+        list.innerHTML = names.length
+            ? names.map((n, i) => `<li role="option" id="sugg-${i}" aria-selected="false" data-name="${esc(n)}"><span class="avatar">${esc(n[0])}</span>${esc(n)}</li>`).join('')
+            : `<li class="combo-empty">${esc(message)}</li>`;
+        list.classList.remove('hidden');
+        input.setAttribute('aria-expanded', 'true');
+        active = -1;
+    }
+    async function suggest() {
+        const q = input.value.trim();
+        if (q.length < 2) { closeList(); return; }
+        if (controller) controller.abort();
+        controller = new AbortController();
+        try {
+            const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`, { credentials: 'same-origin', signal: controller.signal });
+            const out = await res.json().catch(() => ({ users: [] }));
+            if (q !== input.value.trim()) return;
+            showItems(out.users || [], out.error || 'No matching accounts');
+        } catch (e) {
+            if (e.name !== 'AbortError') closeList();
+        }
+    }
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(suggest, 250); });
+    input.addEventListener('keydown', (e) => {
+        const open = !list.classList.contains('hidden');
+        if (e.key === 'ArrowDown' && open) { e.preventDefault(); highlight(active + 1); }
+        else if (e.key === 'ArrowUp' && open) { e.preventDefault(); highlight(active - 1); }
+        else if (e.key === 'Enter' && open && active >= 0) { e.preventDefault(); choose(list.querySelectorAll('[role="option"]')[active].dataset.name); }
+        else if (e.key === 'Escape') closeList();
+    });
+    list.addEventListener('mousedown', (e) => {
+        const item = e.target.closest('[role="option"]');
+        if (item) { e.preventDefault(); choose(item.dataset.name); }
+    });
+    input.addEventListener('blur', () => setTimeout(closeList, 150));
+
     document.getElementById('collabForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = document.getElementById('collaborator-username').value.trim();
+        clearTimeout(timer);
+        if (controller) controller.abort();
+        closeList();
+        const username = input.value.trim();
+        const role = document.getElementById('collaborator-role').value;
         if (!username) return toast('Enter a username', 'alert');
-        const res = await fetch(`/api/form/${formId}/collaborator`, {
+        const res = await fetch(collabUrl(), {
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username })
+            body: JSON.stringify({ username, role })
         });
         const out = await res.json().catch(() => ({}));
         if (res.ok) window.location.reload();
         else toast(out.error || 'Failed to add collaborator', 'alert');
     });
-    document.querySelectorAll('[data-remove-collab]').forEach(btn => btn.addEventListener('click', async () => {
+
+    document.getElementById('collabRows').addEventListener('change', async (e) => {
+        const select = e.target.closest('[data-role-for]');
+        if (!select) return;
+        const username = select.dataset.roleFor;
+        const previous = select.value === 'editor' ? 'viewer' : 'editor';
+        const res = await fetch(collabUrl(username), {
+            method: 'PATCH', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: select.value })
+        });
+        const out = await res.json().catch(() => ({}));
+        if (res.ok) toast(`${username} is now ${select.value === 'editor' ? 'an Editor' : 'a Viewer'}`);
+        else { select.value = previous; toast(out.error || 'Failed to change role', 'alert'); }
+    });
+
+    document.getElementById('collabRows').addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-remove-collab]');
+        if (!btn) return;
         const username = btn.dataset.removeCollab;
         if (!confirm(`Remove access for ${username}?`)) return;
-        const res = await fetch(`/api/form/${formId}/collaborator/${encodeURIComponent(username)}`, { method: 'DELETE', credentials: 'same-origin' });
+        const res = await fetch(collabUrl(username), { method: 'DELETE', credentials: 'same-origin' });
         const out = await res.json().catch(() => ({}));
-        if (res.ok) { document.getElementById(btn.dataset.row).remove(); toast('Access removed'); }
+        if (res.ok) { btn.closest('tr').remove(); toast('Access removed'); }
         else toast(out.error || 'Failed to remove collaborator', 'alert');
-    }));
+    });
     {% endif %}
 });
 </script>

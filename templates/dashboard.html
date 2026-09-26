@@ -44,6 +44,7 @@
     {% for form in forms %}
     {% set stat = stats.get(form.id, {'count': 0, 'last': None}) %}
     {% set is_admin = roles[form.id] == 'admin' %}
+    {% set can_edit = roles[form.id] in ['admin', 'editor'] %}
     <article class="card form-card" data-title="{{ form.title|lower }}" data-status="{{ 'active' if form.is_active else 'closed' }}">
         <div class="form-card-top" style="{% if not form.is_active %}background:var(--border-strong){% endif %}"></div>
         <div class="form-card-body">
@@ -53,7 +54,7 @@
                 {% else %}
                     <span class="badge badge-danger">Closed</span>
                 {% endif %}
-                <span class="badge plain">{{ 'Owner' if is_admin else 'Viewer' }}</span>
+                <span class="badge plain">{{ {'admin': 'Owner', 'editor': 'Editor'}.get(roles[form.id], 'Viewer') }}</span>
             </div>
             <h3><a href="{{ url_for('forms.view_submissions', form_id=form.id) }}">{{ form.title }}</a></h3>
             <div class="form-card-meta">
@@ -68,7 +69,7 @@
         </div>
         <div class="form-card-actions">
             <a href="{{ url_for('forms.view_submissions', form_id=form.id) }}" class="btn btn-soft btn-sm"><svg class="icon icon-sm"><use href="#i-chart"></use></svg>Results</a>
-            {% if is_admin %}
+            {% if can_edit %}
             <a href="{{ url_for('forms.edit_form', form_id=form.id) }}" class="btn btn-ghost btn-sm"><svg class="icon icon-sm"><use href="#i-edit"></use></svg>Edit</a>
             {% endif %}
             <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Copy link" aria-label="Copy link"

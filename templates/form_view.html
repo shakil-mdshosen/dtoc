@@ -45,7 +45,7 @@
                     {% if permissions %}
                     <div class="notice"><svg class="icon icon-sm"><use href="#i-users"></use></svg><div><div class="notice-title">Users with access</div>
                         <div class="row row-wrap" style="gap:6px;margin-top:4px">
-                        {% for perm in permissions %}<span class="chip">{{ perm.username }} <span class="muted">· {{ perm.role }}</span></span>{% endfor %}
+                        {% for perm in permissions %}<span class="chip">{{ perm.username }} <span class="muted">· {{ role_labels.get(perm.role, perm.role) }}</span></span>{% endfor %}
                         </div></div></div>
                     {% endif %}
                 </div>

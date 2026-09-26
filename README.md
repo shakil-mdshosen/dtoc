@@ -26,7 +26,7 @@ The **DTOC (Data Retention & Form Collection)** tool is a modernized, mobile-res
 - Dashboard with response counts, search, status filters, share links, duplicate and delete.
 
 ### 3. Collaboration & Access Control
-- **Granular Permissions:** Form creators can add other Wikimedia users as "Collaborators", allowing them to view and manage submissions.
+- **Collaborator roles:** Form owners can add other Wikimedia users as **Editors** (edit the form's questions and settings, view results, export) or **Viewers** (view results, export), switch a collaborator between roles, or remove them. Only the owner can close/delete the form and manage collaborators. While typing a username, suggestions are fetched from Meta-Wiki's global account list, and the account is checked to exist before access is granted.
 - **Superuser Owner Dashboard:** The system supports a global `OWNER_USERNAME`. The designated owner has access to a centralized dashboard (`/owner/dashboard`) to monitor all forms across the entire Toolforge instance, view response counts, and filter by creator or status.
 
 ### 4. Comprehensive Data Export
