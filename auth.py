@@ -102,6 +102,11 @@ def oauth_callback():
         
         profile = profile_response.json()
         session['username'] = profile.get('username')
+        # The consumer's grant includes email access. Keep the address only if
+        # the user has confirmed it; forms that collect emails require one.
+        email = (profile.get('email') or '').strip()
+        session['email'] = email if email and profile.get('confirmed_email') else None
+        session['email_checked'] = True
         print(f"DEBUG: Successfully logged in user {session['username']}")
         
     except requests.exceptions.Timeout:
@@ -121,4 +126,6 @@ def logout():
     session.pop('access_token', None)
     session.pop('oauth_state', None)
     session.pop('username', None)
+    session.pop('email', None)
+    session.pop('email_checked', None)
     return redirect(url_for('home'))
