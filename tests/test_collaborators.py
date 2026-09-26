@@ -195,16 +195,36 @@ def test_search_users_filters_locked_and_short_queries(monkeypatch):
     assert len(calls) == 1  # cached
 
 
-@pytest.mark.parametrize('payload, expected', [
-    ({'globaluserinfo': {'home': 'enwiki', 'id': 5, 'name': 'Bob'}}, True),
-    ({'globaluserinfo': {'missing': True}}, False),
-    ({'globaluserinfo': {'missing': ''}}, False),
-    ({'globaluserinfo': {'id': 5, 'name': 'Bob', 'locked': True}}, False),
+@pytest.mark.parametrize('users, expected', [
+    ([{'id': 5, 'name': 'Bob'}], True),
+    ([], False),
+    ([{'id': 6, 'name': 'Bobby'}], False),  # agufrom/aguto bound, but require an exact name
+    ([{'id': 5, 'name': 'Bob', 'locked': True}], False),
+    ([{'id': 5, 'name': 'Bob', 'locked': ''}], False),
 ])
-def test_user_exists(monkeypatch, payload, expected):
+def test_user_exists(monkeypatch, users, expected):
     wiki_users._cache.clear()
-    monkeypatch.setattr(wiki_users.requests, 'get', lambda *a, **k: FakeResponse({'query': payload}))
-    assert wiki_users.user_exists('Bob') is expected
+    calls = []
+
+    def fake_get(url, params, headers, timeout):
+        calls.append(params)
+        return FakeResponse({'query': {'globalallusers': users}})
+
+    monkeypatch.setattr(wiki_users.requests, 'get', fake_get)
+    assert wiki_users.user_exists('bob') is expected
+    assert calls[0]['list'] == 'globalallusers'
+    assert calls[0]['agufrom'] == calls[0]['aguto'] == 'Bob'
+    assert calls[0]['aguprop'] == 'lockinfo'
+
+
+@pytest.mark.parametrize('payload', [{'query': None}, {'query': []}, {'error': {'code': 'x'}}, ['not', 'a', 'dict']])
+def test_unexpected_meta_responses_raise_unavailable(monkeypatch, payload):
+    wiki_users._cache.clear()
+    monkeypatch.setattr(wiki_users.requests, 'get', lambda *a, **k: FakeResponse(payload))
+    with pytest.raises(LookupUnavailable):
+        wiki_users.search_users('Bob')
+    with pytest.raises(LookupUnavailable):
+        wiki_users.user_exists('Bob')
 
 
 def test_lookup_errors_raise_unavailable(monkeypatch):
@@ -215,3 +235,34 @@ def test_lookup_errors_raise_unavailable(monkeypatch):
     monkeypatch.setattr(wiki_users.requests, 'get', boom)
     with pytest.raises(LookupUnavailable):
         wiki_users.user_exists('Bob')
+
+
+@pytest.mark.parametrize('body', ['["editor"]', '"editor"', '42', 'null', 'not json'])
+def test_non_object_json_bodies_are_rejected(owner, body):
+    add(owner, 'Bob')
+    headers = {'Content-Type': 'application/json'}
+    post = owner.post('/api/form/1/collaborator', data=body, headers=headers)
+    patch = owner.patch('/api/form/1/collaborator/Bob', data=body, headers=headers)
+    assert post.status_code == 400
+    assert patch.status_code == 400
+
+
+def test_tool_owner_gets_edit_links_on_results_and_dashboard(app, owner):
+    with app.app_context():  # tool owner holds only a viewer permission
+        db.session.add(Permission(form_id=1, username='ToolOwner', role='viewer'))
+        db.session.commit()
+    tool_owner = as_user(app.test_client(), 'ToolOwner')
+    results = tool_owner.get('/form/1/submissions').get_data(as_text=True)
+    assert 'href="/form/1/edit"' in results
+    assert '/form/1/edit' in tool_owner.get('/dashboard').get_data(as_text=True)
+
+
+def test_legacy_unnormalised_usernames_are_matched(app, owner):
+    with app.app_context():
+        db.session.add(Permission(form_id=1, username='bob', role='viewer'))
+        db.session.commit()
+    assert add(owner, 'Bob').status_code == 400  # already a collaborator
+    assert owner.patch('/api/form/1/collaborator/Bob', json={'role': 'editor'}).status_code == 200
+    assert Permission.query.filter_by(form_id=1, username='bob').one().role == 'editor'
+    assert owner.delete('/api/form/1/collaborator/Bob').status_code == 200
+    assert Permission.query.filter_by(form_id=1, username='bob').count() == 0

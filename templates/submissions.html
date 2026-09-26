@@ -356,6 +356,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     input.addEventListener('blur', () => setTimeout(closeList, 150));
 
+    async function collabRequest(url, options) {
+        try {
+            const res = await fetch(url, Object.assign({ credentials: 'same-origin' }, options));
+            const out = await res.json().catch(() => ({}));
+            return { ok: res.ok, out };
+        } catch (_) {
+            return { ok: false, out: { error: 'Network error. Please check your connection and try again.' } };
+        }
+    }
+
     document.getElementById('collabForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         clearTimeout(timer);
@@ -364,29 +374,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = input.value.trim();
         const role = document.getElementById('collaborator-role').value;
         if (!username) return toast('Enter a username', 'alert');
-        const res = await fetch(collabUrl(), {
-            method: 'POST', credentials: 'same-origin',
+        const button = e.target.querySelector('button[type="submit"]');
+        button.disabled = true;
+        const { ok, out } = await collabRequest(collabUrl(), {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, role })
         });
-        const out = await res.json().catch(() => ({}));
-        if (res.ok) window.location.reload();
-        else toast(out.error || 'Failed to add collaborator', 'alert');
+        if (ok) { window.location.reload(); return; }
+        button.disabled = false;
+        toast(out.error || 'Failed to add collaborator', 'alert');
     });
+
+    // Remember each select's saved role so a failed update can be rolled back.
+    document.querySelectorAll('[data-role-for]').forEach(sel => { sel.dataset.saved = sel.value; });
 
     document.getElementById('collabRows').addEventListener('change', async (e) => {
         const select = e.target.closest('[data-role-for]');
         if (!select) return;
         const username = select.dataset.roleFor;
-        const previous = select.value === 'editor' ? 'viewer' : 'editor';
-        const res = await fetch(collabUrl(username), {
-            method: 'PATCH', credentials: 'same-origin',
+        const role = select.value;
+        // One request at a time per collaborator, so updates can't land out of order.
+        select.disabled = true;
+        const { ok, out } = await collabRequest(collabUrl(username), {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role: select.value })
+            body: JSON.stringify({ role })
         });
-        const out = await res.json().catch(() => ({}));
-        if (res.ok) toast(`${username} is now ${select.value === 'editor' ? 'an Editor' : 'a Viewer'}`);
-        else { select.value = previous; toast(out.error || 'Failed to change role', 'alert'); }
+        select.disabled = false;
+        if (ok) {
+            select.dataset.saved = role;
+            toast(`${username} is now ${role === 'editor' ? 'an Editor' : 'a Viewer'}`);
+        } else {
+            select.value = select.dataset.saved;
+            toast(out.error || 'Failed to change role', 'alert');
+        }
     });
 
     document.getElementById('collabRows').addEventListener('click', async (e) => {
@@ -394,10 +416,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!btn) return;
         const username = btn.dataset.removeCollab;
         if (!confirm(`Remove access for ${username}?`)) return;
-        const res = await fetch(collabUrl(username), { method: 'DELETE', credentials: 'same-origin' });
-        const out = await res.json().catch(() => ({}));
-        if (res.ok) { btn.closest('tr').remove(); toast('Access removed'); }
-        else toast(out.error || 'Failed to remove collaborator', 'alert');
+        btn.disabled = true;
+        const { ok, out } = await collabRequest(collabUrl(username), { method: 'DELETE' });
+        if (ok) { btn.closest('tr').remove(); toast('Access removed'); return; }
+        btn.disabled = false;
+        toast(out.error || 'Failed to remove collaborator', 'alert');
     });
     {% endif %}
 });

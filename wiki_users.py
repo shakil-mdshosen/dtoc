@@ -47,7 +47,7 @@ def _api(params):
         data = response.json()
     except (requests.RequestException, ValueError) as exc:
         raise LookupUnavailable(str(exc)) from exc
-    if not isinstance(data, dict) or 'query' not in data:
+    if not isinstance(data, dict) or not isinstance(data.get('query'), dict):
         raise LookupUnavailable('Unexpected response from Meta-Wiki')
     if len(_cache) > 500:
         _cache.clear()
@@ -72,9 +72,17 @@ def search_users(prefix, limit=8):
 
 
 def user_exists(name):
-    """True if a global account with exactly this name exists and isn't locked."""
+    """True if a global account with exactly this name exists and isn't locked.
+
+    Uses ``list=globalallusers`` bounded to the exact name, because that module
+    documents ``aguprop=lockinfo`` for reporting locked accounts.
+    """
     name = normalize_username(name)
     if not name:
         return False
-    info = _api({'meta': 'globaluserinfo', 'guiuser': name}).get('globaluserinfo', {})
-    return bool(info) and not _flag(info, 'missing') and not _flag(info, 'locked')
+    query = _api({'list': 'globalallusers', 'agufrom': name, 'aguto': name,
+                  'agulimit': '1', 'aguprop': 'lockinfo'})
+    for user in query.get('globalallusers', []):
+        if isinstance(user, dict) and user.get('name') == name:
+            return not _flag(user, 'locked')
+    return False

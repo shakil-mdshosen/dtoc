@@ -620,7 +620,7 @@ def view_submissions(form_id):
         headers=headers, rows=rows, summary=summarize(schema, datas),
         daily=sorted(daily.items())[-30:], question_count=len(input_fields(schema)),
         is_admin=is_admin, collaborators=collaborators,
-        can_edit=perm.role in ('admin', 'editor'), role=perm.role, role_labels=ROLE_LABELS,
+        can_edit=can_edit(form), role=perm.role, role_labels=ROLE_LABELS,
         show_email=bool(schema['settings'].get('collect_email') or any(s.submitted_email for s in submissions)),
     )
 
@@ -647,6 +647,22 @@ def _role_from(payload, default='viewer'):
     return role if role in COLLABORATOR_ROLES else None
 
 
+def _json_object():
+    """The request's JSON body if it is an object, else ``None``."""
+    payload = request.get_json(silent=True)
+    return payload if isinstance(payload, dict) else None
+
+
+def _find_collaborator(form_id, username):
+    """Permission for ``username`` on a form, also matching names stored before normalisation."""
+    perm = Permission.query.filter_by(form_id=form_id, username=username).first()
+    if perm:
+        return perm
+    wanted = normalize_username(username)
+    return next((p for p in Permission.query.filter_by(form_id=form_id)
+                 if normalize_username(p.username) == wanted), None)
+
+
 @forms_bp.route('/api/users/search')
 @login_required
 def search_wiki_users():
@@ -664,7 +680,9 @@ def add_collaborator(form_id):
     if not get_permission(form_id, admin=True):
         return jsonify({"error": "Only the form owner can add collaborators"}), 403
 
-    payload = request.get_json(silent=True) or {}
+    payload = _json_object()
+    if payload is None:
+        return jsonify({"error": "Request body must be a JSON object"}), 400
     username = normalize_username(payload.get('username'))
     if not username:
         return jsonify({"error": "Username required"}), 400
@@ -672,7 +690,7 @@ def add_collaborator(form_id):
     if not role:
         return jsonify({"error": "Role must be 'editor' or 'viewer'"}), 400
 
-    if Permission.query.filter_by(form_id=form_id, username=username).first():
+    if _find_collaborator(form_id, username):
         return jsonify({"error": f"{username} is already a collaborator"}), 400
 
     try:
@@ -697,11 +715,14 @@ def change_collaborator_role(form_id, username):
     if not get_permission(form_id, admin=True):
         return jsonify({"error": "Only the form owner can change roles"}), 403
 
-    role = _role_from(request.get_json(silent=True) or {}, default='')
+    payload = _json_object()
+    if payload is None:
+        return jsonify({"error": "Request body must be a JSON object"}), 400
+    role = _role_from(payload, default='')
     if not role:
         return jsonify({"error": "Role must be 'editor' or 'viewer'"}), 400
 
-    target_perm = Permission.query.filter_by(form_id=form_id, username=username).first()
+    target_perm = _find_collaborator(form_id, username)
     if not target_perm:
         return jsonify({"error": "Collaborator not found"}), 404
     if target_perm.role == 'admin':
@@ -723,7 +744,7 @@ def remove_collaborator(form_id, username):
     if not get_permission(form_id, admin=True):
         return jsonify({"error": "Only the form owner can remove collaborators"}), 403
 
-    target_perm = Permission.query.filter_by(form_id=form_id, username=username).first()
+    target_perm = _find_collaborator(form_id, username)
     if not target_perm:
         return jsonify({"error": "Collaborator not found"}), 404
 

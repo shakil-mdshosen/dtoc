@@ -44,7 +44,7 @@
     {% for form in forms %}
     {% set stat = stats.get(form.id, {'count': 0, 'last': None}) %}
     {% set is_admin = roles[form.id] == 'admin' %}
-    {% set can_edit = roles[form.id] in ['admin', 'editor'] %}
+    {% set can_edit = roles[form.id] in ['admin', 'editor'] or is_owner %}
     <article class="card form-card" data-title="{{ form.title|lower }}" data-status="{{ 'active' if form.is_active else 'closed' }}">
         <div class="form-card-top" style="{% if not form.is_active %}background:var(--border-strong){% endif %}"></div>
         <div class="form-card-body">
