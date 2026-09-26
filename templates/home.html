@@ -10,7 +10,7 @@
             <a href="{{ url_for('forms.builder') }}" class="btn btn-primary btn-lg"><svg class="icon"><use href="#i-plus"></use></svg>Create a form</a>
             <a href="{{ url_for('forms.dashboard') }}" class="btn btn-lg"><svg class="icon"><use href="#i-grid"></use></svg>My forms</a>
         {% else %}
-            <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg"><svg class="icon"><use href="#i-user"></use></svg>Log in with Wikimedia</a>
+            <a href="{{ login_url() }}" class="btn btn-primary btn-lg"><svg class="icon"><use href="#i-user"></use></svg>Log in with Wikimedia</a>
         {% endif %}
     </div>
     {% if session.get('username') %}

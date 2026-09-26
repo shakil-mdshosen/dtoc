@@ -22,7 +22,8 @@ def create_app(config_class=Config):
 
     @app.context_processor
     def inject_owner_flag():
-        return {'is_owner': is_owner_user(session.get('username'))}
+        from auth import login_url
+        return {'is_owner': is_owner_user(session.get('username')), 'login_url': login_url}
 
     with app.app_context():
         db.create_all()

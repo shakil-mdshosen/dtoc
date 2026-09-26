@@ -59,7 +59,7 @@
                     <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
                 </button>
             {% else %}
-                <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">
+                <a href="{{ login_url() }}" class="btn btn-primary btn-sm">
                     <svg class="icon icon-sm" aria-hidden="true"><use href="#i-user"></use></svg>Log in with Wikimedia
                 </a>
             {% endif %}

@@ -565,6 +565,13 @@
           done();
           return;
         }
+        if (res.status === 401 && data.login_url) {
+          // Session expired: answers are kept in the draft, so log in and come back.
+          saveDraft();
+          window.DTOC.toast(data.message || 'Please log in again.', 'alert');
+          setTimeout(() => { window.location.href = data.login_url; }, 1200);
+          return;
+        }
         if (data.errors) {
           Object.entries(data.errors).forEach(([id, msg]) => showError(id, msg));
           const firstId = Object.keys(data.errors)[0];

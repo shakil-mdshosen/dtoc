@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Log in required · DTOC Forms{% endblock %}
+{% block container_class2 %}container-narrow{% endblock %}
+
+{% block content %}
+<div class="alert alert-warning" role="alert">
+    <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+    <div>
+        <strong>You need to log in to {{ 'access this form' if is_form else 'view this page' }}.</strong>
+        Please <a href="{{ login_link }}">log in with your Wikimedia account</a> to continue.
+    </div>
+</div>
+
+<div class="card fv-done">
+    <div class="fv-done-icon" style="background:var(--warning-soft);color:var(--warning)">
+        <svg class="icon"><use href="#i-lock"></use></svg>
+    </div>
+    <h1 style="font-size:24px">Log in to continue</h1>
+    <p class="muted" style="margin:10px auto 24px;max-width:460px">
+        {% if is_form %}
+        This form only accepts responses from logged-in Wikimedia users, so each response can be linked to an account.
+        {% else %}
+        This page is only available to logged-in Wikimedia users.
+        {% endif %}
+        After logging in on Meta-Wiki you'll be brought straight back here.
+    </p>
+    <a href="{{ login_link }}" class="btn btn-primary btn-lg">
+        <svg class="icon"><use href="#i-user"></use></svg>Log in with Wikimedia
+    </a>
+</div>
+{% endblock %}
