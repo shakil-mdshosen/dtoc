@@ -46,7 +46,7 @@ This is a design document. It does not add the Google client, credentials, or an
 | Submission | `POST /form/<id>` validates with `validate_submission()`, stores `data` keyed by field `key`, commits, returns 201. No external call after commit today | `forms_api.py:373-416` |
 | Schema | `sanitize_settings()` allow-lists settings (`theme_color`, `one_response_per_user`, `response_limit`, `close_at`, `collect_email`, …). `column_headers()` = input fields in order + legacy keys. `format_value()` joins lists with `, ` and dicts as `k: v` | `form_schema.py:175-194, 416-435` |
 | Export | CSV / JSON / XLSX share `_load_export()` (permission check + `AuditLog`), meta columns `ID, Submitted At, Submitted By[, Submitted Email]` + question headers | `export.py:14-148` |
-| Permissions | `can_manage()` = owner or `admin` permission, `can_edit()` = owner / `admin` / `editor`. Only the form owner can close / delete / manage collaborators | `forms_api.py:178-199, 508-584` |
+| Permissions | `can_manage()` = a form admin/owner or the configured `OWNER_USERNAME`; `can_edit()` = owner / `admin` / `editor`. There is no generic "form creator" helper, so sheets must explicitly compare `Form.created_by` for owner-only actions. Only owner/admin can close / delete / manage collaborators under existing routes | `forms_api.py:178-199, 508-584` |
 | Retention | `janitor.py` purges submissions of forms closed >90 days, keeps the `Form` and `AuditLog` rows. Daily `toolforge-jobs` job in `setup_jobs.sh` | `janitor.py`, `setup_jobs.sh` |
 | Privacy | `templates/privacy.html` states: no third-party scripts/fonts/images, no analytics or tracking, data not sold or shared except as required by law / Cloud Services Terms | `templates/privacy.html:71-84, 110` |
 | Tests | `tests/test_*.py` (pytest). `test_oauth.py` is a manual script, not a pytest test | `tests/`, `test_oauth.py` |
@@ -62,8 +62,8 @@ Consequences for the design: the Sheets mapping, the export columns, and the OAu
 2. Owner sees a "Google Sheets" section: status `Not connected`, a short explanation that responses will be copied to Google, and a **Connect Google Sheets** button. The section is hidden entirely when Google sync is not configured on the instance (see §4.5).
 3. Clicking it starts Google OAuth ( §5 ). The creator picks a Google account and consents to the two scopes in §5.2.
 4. Back on DTOC, the creator chooses **Create new spreadsheet**. DTOC creates it in that Google account's Drive, names it after the form title, writes the header row, and shows a link "Open spreadsheet" plus a status `Synced — N rows`.
-5. Every new submission appends a row within seconds. The submissions page (`/form/<id>/submissions`) shows the sync status and the last sync time / last error.
-6. The creator can, at any time: **Sync now** (backfill any missed rows), **Pause sync**, **Resume sync**, or **Disconnect**. Disconnect stops future writes and deletes DTOC's stored Google token for that form ( §5.5 ); the spreadsheet itself stays in the creator's Drive.
+5. Every new submission is queued immediately and normally appends within the worker interval (target: 5 minutes). The submissions page (`/form/<id>/submissions`) shows the sync status and the last sync time / last error.
+6. The creator can, at any time: **Sync now** (backfill any missed rows), **Pause sync**, **Resume sync**, or **Disconnect the form**. Form disconnect pauses only that form and leaves the account token available for other forms; account disconnect is the separate `/google/disconnect` action that revokes the refresh token and deletes it from DTOC. In both cases the spreadsheet itself stays in the creator's Drive.
 
 ### 3.2 Respondent experience
 
@@ -85,8 +85,8 @@ Consequences for the design: the Sheets mapping, the export columns, and the OAu
 ```
 Respondent (Wikimedia login)
   -> POST /form/<id>  (forms_api.view_form)
-  -> validate_submission() -> Submission row in MariaDB -> 201
-  -> enqueue SyncQueue row (same DB transaction)      [never blocks the 201]
+  -> validate_submission() -> Submission row committed in MariaDB -> 201
+  -> enqueue SyncQueue row in a separate short transaction [best-effort; never blocks or rolls back the 201]
   -> [background] sync worker
        -> load GoogleAccount refresh token (decrypt)
        -> Sheets API values.append / values.batchUpdate
@@ -128,7 +128,7 @@ No new frontend dependency, no CDN, no Google Fonts — the privacy invariant in
 |---|---|
 | `GOOGLE_CLIENT_ID` | Google Cloud OAuth client ID (Web application) |
 | `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth client secret |
-| `GOOGLE_TOKEN_KEY` | Fernet key (44-char base64) used only to encrypt refresh tokens. Distinct from Flask `SECRET_KEY`. Rotate by re-encrypting stored tokens; a missing key must fail startup loudly, not fall back to a dev default. |
+| `GOOGLE_TOKEN_KEY` | Fernet key (44-char base64) used only to encrypt refresh tokens. Distinct from Flask `SECRET_KEY`. Rotate by re-encrypting stored tokens; production must fail closed / disable Google routes if the key is missing or invalid rather than generating a throwaway key or starting with a dev default. |
 | `GOOGLE_SYNC_ENABLED` | `1` / `0`. When `0` or unset, the Sheets UI is hidden and all Google routes return 404 / disabled. This is the kill-switch and the way to run the tool with no Google configured. |
 
 Add all four to `config.py` as `os.environ.get(...)` with no secret defaults, following the existing `WIKI_CLIENT_ID` pattern. Document them in `README.md` next to the existing env-var table.
@@ -137,7 +137,7 @@ Add all four to `config.py` as `os.environ.get(...)` with no secret defaults, fo
 
 - No service account, no shared Google account for all forms, no storing of a Google password.
 - No Google data in the Flask session (Wikimedia `auth.py` already avoids this for its own tokens; do the same here — only the Wikimedia username stays in session, Google tokens stay in the DB, encrypted).
-- No new database server: the queue and the sync tables live in the same MariaDB / SQLite database as `Form` / `Submission`, so a sync row and its submission row commit or roll back together.
+- No new database server: the queue and the sync tables live in the same MariaDB / SQLite database as `Form` / `Submission`. The submission commit remains independent of queue insertion: if queue insertion fails after the submission succeeds, DTOC logs the event and relies on `Sync now` / backfill to recover it.
 
 ### 4.5 Feature flag / rollout gate
 
@@ -166,6 +166,8 @@ This is a **second, independent OAuth flow**. The Wikimedia login proves who the
 | `https://www.googleapis.com/auth/drive.file` | Create files in Drive and open files the user picks / the app created. Required for v1 (create). **Do not** request full `https://www.googleapis.com/auth/drive` in v1 — it sees every file in the account and will make verification harder and the consent screen scarier. |
 
 Request `access_type=offline` and `prompt=consent` on the first connect, so Google returns a refresh token. Request `include_granted_scopes=true` only if incremental scopes are added later; do not silently widen scopes.
+
+The two scopes above are sufficient for the Sheets/Drive operations. If the implementation fetches a Google profile or userinfo email for display, it must explicitly include and justify only the narrow identity scope(s) needed (for example `openid`/`https://www.googleapis.com/auth/userinfo.email`), or it must omit Google profile lookup and store `google_email = NULL`. It must not imply that "two scopes" means exactly two total if identity data is actually requested. The email is display-only and is not an authorization identity.
 
 The consent screen must show, in plain language, that DTOC will create / edit **one spreadsheet per form the creator connects**, and copy that form's responses into it. That wording must match the privacy page (§10).
 
@@ -197,6 +199,8 @@ Security requirements, all testable:
 - The access token is held in memory only for the request that needs it; the refresh token is the only long-lived secret, and it is encrypted at rest (§5.4).
 - **Do not repeat `auth.py`'s `print(f"DEBUG: …")` logging.** Token exchange responses, profile payloads, and Google error bodies must not be printed or logged. Log at most: event name, form ID, Google HTTP status, and a short error kind.
 - CSRF: the connect / disconnect / create-sheet actions are POSTs (or GET only for the OAuth start, which carries `state`). Disconnect and pause must not be GET links that another site can trigger.
+- If Google supplies no refresh token on a `prompt=consent` exchange, do not persist an access-only account as "connected". Treat this as a reconnect-required failure and surface a generic message.
+- Store the exact OAuth consented scopes returned by Google, and verify the required scopes before enabling sync. Never grant access based on scopes sent in the request alone.
 
 ### 5.4 Token storage and encryption
 
@@ -204,7 +208,7 @@ Security requirements, all testable:
 - Encryption: `cryptography.fernet.Fernet(GOOGLE_TOKEN_KEY)`. The key is generated once with `Fernet.generate_key()` and stored only in Toolforge envvars. If the key is missing in production, the Google blueprint must refuse to start the flow with a clear error, not generate a throwaway key and silently make stored tokens undecryptable after a restart.
 - Decryption failure (wrong / rotated key) is treated as "token unusable": pause sync, ask the owner to reconnect, log the event kind only. Never log the ciphertext or the key.
 - Refresh: on a 401 from the Sheets API, refresh the access token with the stored refresh token, retry once, and if the refresh fails with `invalid_grant`, mark the account disconnected and pause all its syncs. That is the revoked-token path.
-- Revocation on disconnect: call Google's revoke endpoint for the refresh token, then delete the `GoogleAccount` row and mark its `SheetSync` rows `disconnected`. Deleting the row without revoking leaves a live token in Google's hands; revoking without deleting leaves a dead row that can confuse status checks. Do both, in that order, and log an `AuditLog` entry.
+- Revocation on disconnect: call Google's revoke endpoint for the refresh token, then delete the `GoogleAccount` row and mark its `SheetSync` rows `disconnected`. Deleting the row without revoking leaves a live token in Google's hands. Revoke first, but handle revoke/network failures deliberately: a transient revoke failure must not silently claim disconnect succeeded; it should show a retryable status and keep the account row so it can be revoked later. After a successful revoke, delete the account and mark forms disconnected, in one short DB transaction where feasible, and log an `AuditLog` entry. If the revoke endpoint is unreachable, do not expose or log the token.
 - One Google account per Wikimedia user in v1. If the owner connects a different Google account later, that replaces the stored token (after an explicit "switch account" confirmation), and existing syncs keep pointing at the old spreadsheets until the owner reconnects / re-creates them. Do not silently re-point old sheets at a new account.
 
 ### 5.5 Who can connect what
@@ -212,14 +216,14 @@ Security requirements, all testable:
 | Action | Who (v1) |
 |---|---|
 | Connect / switch / disconnect *their own* Google account | Any logged-in Wikimedia user, for their own account only. The stored row is keyed by Wikimedia username. |
-| Enable sync on a form, create its spreadsheet, pause / resume / disconnect *that form's* sync | Form owner only (`created_by`, or `is_owner_user`). Editors and viewers can see the sync status, but cannot change it. Rationale: the spreadsheet lives in the owner's Google Drive and contains respondent data; only the owner should authorise that export. Revisit in Phase 4 if editors need it, with an explicit owner opt-in. |
+| Enable sync on a form, create its spreadsheet, pause / resume / disconnect *that form's* sync | The form creator in v1: `Form.created_by` must equal `session['username']`. This is stricter than current `can_manage()` / `can_edit()`, which also allow admin/owner/editor roles. It prevents a collaborator from exporting responses to their own Drive without the creator's explicit policy decision. Editors and viewers can see the sync status, but cannot change it. Revisit in Phase 4 if editors need it, with an explicit owner opt-in. |
 | View sync status | Owner, editors, viewers (read-only badge on dashboard / submissions page). |
 
 ## 6. Data model and API
 
 ### 6.1 New tables
 
-All new tables are created by `db.create_all()` for a fresh install, and any column added later follows the existing `ensure_schema_upgrades()` idempotent-`ALTER` pattern in `models.py`. No migration framework is introduced in v1.
+All new tables are created by `db.create_all()` for a fresh install. This repository does not currently run migrations for a new table beyond `db.create_all()`; therefore each implementation PR must verify startup against an existing SQLite/MariaDB database. `ensure_schema_upgrades()` may remain for future nullable column additions, but it is not a substitute for creating missing new tables in deployed databases. No migration framework is introduced in v1.
 
 ```python
 class GoogleAccount(db.Model):
@@ -254,22 +258,23 @@ class SyncQueue(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     form_id = db.Column(db.Integer, db.ForeignKey('form.id'), nullable=False)
     submission_id = db.Column(db.Integer, db.ForeignKey('submission.id'), nullable=False)
-    # 'pending' | 'sent' | 'failed' | 'skipped'
+    # 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
     status = db.Column(db.String(50), nullable=False, default='pending')
     attempts = db.Column(db.Integer, nullable=False, default=0)
     last_error = db.Column(db.Text, nullable=True)
     next_retry_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    # unique pending row per submission, so a double-submit cannot queue twice:
-    # enforced in code + a unique index on (submission_id) where status='pending'
-    # (MariaDB partial indexes are limited; enforce in code and de-duplicate in the worker)
+    # At most one queue record per submission in v1. Use a real unique constraint
+    # on submission_id if the schema/worker lifecycle supports re-queueing in place;
+    # do not rely on a MariaDB partial index. Re-queue sent/failed rows by updating
+    # the existing record back to pending rather than inserting a duplicate.
 ```
 
 Notes:
 
 - `SheetSync.columns_json` is the frozen header mapping. It is the single source of truth for row order. It is built once from `column_headers(schema, [])` plus the meta columns in §8, and only appended to (never reordered) when the form gains a new question. See §8.3.
-- `SyncQueue` rows are created in the same transaction as the `Submission` row (§7.1). A submission with no queue row is a bug; the "Sync now" backfill must be able to rebuild queue rows from `Submission` rows whose ID is greater than `last_synced_submission_id`.
+- `SyncQueue` rows are inserted in a separate short transaction after the `Submission` commit (§7.1). A submission with no queue row is a recoverable bug; the "Sync now" backfill must rebuild queue rows from `Submission` rows whose ID is greater than `last_synced_submission_id`, and queue insertion failure must never invalidate the successful submission.
 - `AuditLog` already exists: log `GOOGLE_CONNECT`, `GOOGLE_DISCONNECT`, `SHEET_CREATE`, `SHEET_SYNC_PAUSED`, `SHEET_SYNC_RESUMED`, `SHEET_EXPORT_FAILED` (with form ID and counts, never with answer data or tokens).
 
 ### 6.2 New routes
@@ -283,7 +288,7 @@ All under the new `google_bp` blueprint, registered in `app.py` next to `auth_bp
 | `/google/disconnect` | POST | Revoke + delete own `GoogleAccount` (§5.4) |
 | `/form/<id>/sheets/connect` | POST | Create spreadsheet + header row + backfill queue ( §7.2 ). Owner only. Returns the spreadsheet URL. |
 | `/form/<id>/sheets/disconnect` | POST | Pause sync for this form, mark `SheetSync` disconnected. Does not delete the spreadsheet. Owner only. |
-| `/form/<id>/sheets/sync-now` | POST | Enqueue all unsynced submissions for this form, trigger the worker path once. Owner / editor. Rate-limited: at most once per minute per form. |
+| `/form/<id>/sheets/sync-now` | POST | Enqueue all unsynced submissions for this form, trigger the worker path once. Form creator only in v1. Rate-limited: at most once per minute per form. |
 | `/form/<id>/sheets/status` | GET (JSON) | `{status, spreadsheet_url, last_synced_at, pending_count, last_error}` for the dashboard badge. Same permission as viewing submissions. |
 
 Do not add a route that lists all of a user's Google Drive files, and do not add a route that takes an arbitrary spreadsheet ID from the user in v1 — that is the Phase 4 "existing sheet" work, and it needs the Drive picker / permission check designed separately.
@@ -322,20 +327,20 @@ Rationale: a Google outage, a slow Sheets API, or a revoked token must not turn 
 3. `spreadsheets.create` with `properties.title = form.title` (truncated to Sheets' title limit, sanitised the same way form titles are sanitised today). Default sheet/tab title: `Responses`.
 4. Build the header row (§8.1), write it with `values.update` to `Responses!A1`, store it in `SheetSync.columns_json`.
 5. Create the `SheetSync` row (`status='active'`).
-6. Backfill: for every existing `Submission` for the form, in `submitted_at` / ID order, create a `SyncQueue` row. Do this in batches (e.g. 500) so a form with thousands of responses does not time out the request. The worker (§7.3) then appends them in order.
+6. Backfill: for every existing `Submission` for the form, in `submitted_at` / ID order, create or update a `SyncQueue` row. Enqueue only bounded batches in the web request (for example 500) and leave the remainder to the scheduled worker, so a form with thousands of responses does not time out. The worker (§7.3) appends in submission-ID order.
 7. Log `SHEET_CREATE` in `AuditLog`, flash the spreadsheet link to the owner.
 
 ### 7.3 Worker — `sync_worker.py`
 
 Scheduled with `toolforge-jobs`, like `janitor.py` in `setup_jobs.sh`. Suggested schedule: every 5 minutes. The worker:
 
-1. Claims up to N pending rows (e.g. 100 per run), oldest first, grouped by form, with an atomic `UPDATE … SET status='sending', attempts=attempts+1 WHERE status='pending' AND next_retry_at <= now` so two workers cannot claim the same row.
+1. Claims up to N pending rows (e.g. 100 per run), oldest first, grouped by form, with an atomic `UPDATE … SET status='sending', attempts=attempts+1 WHERE status='pending' AND next_retry_at <= now` so two workers cannot claim the same row. Stale `sending` rows must be reclaimed after a bounded lease timeout, otherwise an interrupted worker can strand a submission indefinitely.
 2. For each form, loads the owner's decrypted refresh token, builds a Sheets client, refreshes the access token if needed.
 3. Appends rows in batches with `values.append` (`valueInputOption='USER_ENTERED'`, `insertDataOption='INSERT_ROWS'`). One API call per batch (e.g. up to 100 rows), not one call per submission — quota (§9).
 4. On success: mark rows `sent`, update `SheetSync.last_synced_at` / `last_synced_submission_id`.
 5. On failure, classify it ( §9 ):
    - `transient` (5xx, timeout, 429): keep `pending`, set `next_retry_at` with exponential backoff (1, 5, 15, 60 minutes), cap attempts at e.g. 20 over 7 days.
-   - `auth` (401 after one refresh, `invalid_grant`): mark the `GoogleAccount` disconnected, pause the `SheetSync` (`status='error'`), stop retrying that form until the owner reconnects.
+   - `auth` (401 after one refresh, `invalid_grant`): mark the `GoogleAccount` unusable/disconnected, pause the `SheetSync` (`status='error'`), stop retrying that form until the owner reconnects. Any remaining `sending`/`pending` rows stay queued for the configured retry/reconnect policy; do not mark the whole account disconnected solely because one sheet was deleted or permission was removed.
    - `not_found` / `forbidden` (404 / 403, sheet deleted or sharing removed): pause the sync, keep the queue for 7 days, surface "spreadsheet not found / access removed — reconnect or disconnect".
    - After the retry window expires: mark rows `failed`, keep them in DTOC, and show the owner a count. The data is not lost; it is in `Submission` and in the CSV export, and "Sync now" can re-queue it.
 6. Logs only counts, form IDs, and error kinds. Never logs row contents, tokens, or the spreadsheet's full error body if it contains data.
@@ -390,7 +395,7 @@ For a submission, the row is `_meta_row(sub, with_email)` + `[format_value(data.
 | Tab renamed by owner in Sheets | Next append fails / wrong tab | Worker checks the tab exists by title on each run; if missing, pause with "Responses tab not found — rename it back or disconnect". Do not auto-create a second tab silently. |
 | Form closed / response limit reached | Existing `availability()` | No new submissions, so no new sync rows. Existing queue still drains. |
 | Response deleted in DTOC | `DELETE /api/form/<id>/submission/<id>` | **v1: row stays in the Sheet.** Deleting a row in Sheets by position is unsafe once anyone has sorted / edited the Sheet. Document this. A later phase may add a "mark as deleted" column or a manual re-export. Do not silently delete Sheet rows in v1. |
-| Janitor purges submissions (closed >90 days) | `janitor.py` | Sheet rows already written stay in Google. That is intentional: the Sheet is the creator's copy. The privacy page must say the 90-day purge does not delete the Google copy. |
+| Janitor purges submissions (closed >90 days) | `janitor.py` | Sheet rows already written stay in Google. That is intentional: the Sheet is the creator's copy. The privacy page must say the 90-day purge does not delete the Google copy. Before deleting a `Submission`, janitor must handle its queue record: if a sync is paused/retrying, the implementation must define whether the job waits for the queue to settle, skips the purge, or preserves enough DTOC data to complete it; it must not create FK errors or silently lose unsent respondent rows. |
 
 ### Quotas
 
@@ -405,11 +410,11 @@ Google Sheets API default quota is on the order of a few hundred requests per 10
 
 This is the section Copilot and the human reviewer should check hardest. A Google token that can edit a spreadsheet containing respondent data is a sensitive credential.
 
-- **Least privilege:** only the two scopes in §5.2. No Drive full scope, no Gmail, no profile scope beyond the email needed for display.
+- **Least privilege:** the Sheets/Drive operations use only the two scopes in §5.2. No Drive full scope, no Gmail, and no identity/profile scope unless the implementation explicitly chooses to store a Google display email. No Google profile permission is needed if that display email is omitted.
 - **Encryption at rest:** Fernet, key in envvars only (§5.4). No token in git, in logs, in the Flask session, in a URL, or in an error message shown to a user who is not the token owner.
 - **Separation of identities:** Wikimedia username is the DTOC identity; Google email is display-only. Never use the Google email to grant DTOC access, and never use the Wikimedia username to grant Google access.
 - **Audit:** every connect, disconnect, sheet create, pause, resume, and sync failure that pauses a form is an `AuditLog` row, with form ID and counts only.
-- **Privacy page:** update `templates/privacy.html` *before* the feature ships, and bump its date. It must say, in plain language: (a) sync is opt-in per form, by the form owner; (b) responses are copied to a Google spreadsheet in the owner's Google account; (c) Google's privacy policy then applies to that copy; (d) the 90-day janitor purge (§9) does not delete the Google copy; (e) disconnecting stops future copies but does not delete the copy; (f) the owner's Google email is stored (encrypted token + display email) and deleted on disconnect.
+- **Privacy page:** update `templates/privacy.html` *before* the feature ships, and bump its date. It must say, in plain language: (a) sync is opt-in per form, by the form owner; (b) responses are copied to a Google spreadsheet in the owner's Google account; (c) Google's privacy policy then applies to that copy; (d) the 90-day janitor purge (§9) does not delete the Google copy; (e) disconnecting the form stops future copies but does not delete the copy, while account disconnect revokes/deletes DTOC's credential; (f) if a Google display email is stored, state that the email is used only for account identification in the UI and is deleted on account disconnect. It must also disclose that Google may retain or manage data under Google's own policies.
 - **Form notice:** when sync is active, the form view shows a short notice to respondents that responses are also stored in a Google Sheet. Exact wording to be agreed in implementation review; the notice must be present before the first synced submission, not added later.
 - **Toolforge policy:** no third-party scripts in the browser (§4.2). Server-side calls to `googleapis.com` from Toolforge are outbound HTTPS from the tool account, like the existing Meta-Wiki API calls in `wiki_users.py`. Confirm outbound access to `*.googleapis.com` works from the Toolforge webservice before merging the implementation — if it is blocked, the implementation cannot ship as designed.
 - **No respondent Google login:** respondents never see a Google prompt. If a future phase wants respondents to sign in with Google, that is a separate design and a separate privacy review.
@@ -497,13 +502,15 @@ This is the most likely cause of delay, and it is not solved by writing more cod
 4. **Response deletion:** confirm the v1 rule — a response deleted in DTOC stays in the Sheet. Is that acceptable, or should deletion be blocked / warned while sync is on?
 5. **Pilot forms:** which 2–3 forms should pilot this, and are their owners happy to be test users for Google verification?
 6. **Privacy wording:** who reviews the updated privacy page and the respondent notice — you, Wikimedia Bangladesh, or someone else?
+7. **Retention vs. unsent rows:** if a closed form reaches 90 days while a sync queue is paused or retrying, should the janitor wait/skip purge, expire queued rows and purge, or preserve the queue until an owner decision? This policy must not guessably conflict with the 90-day deletion promise.
+8. **Google account switching / key rotation:** is the owner comfortable with existing sheets staying under the old account and requiring manual re-create after switching, and what process should an operator use to re-encrypt refresh tokens after a `GOOGLE_TOKEN_KEY` rotation?
 
 ## 15. Acceptance criteria (for the implementation PR)
 
 - [ ] A form owner can connect Google, create a sheet, and see existing responses backfilled, with no Google prompt shown to respondents.
 - [ ] A new submission appears as a new row, in export column order, within 5 minutes (worker interval) — and the respondent's 201 is unaffected if Google is down.
 - [ ] Revoking the Google token pauses sync with a clear reconnect message; no response is lost from DTOC.
-- [ ] Disconnect revokes the token at Google and deletes it from DTOC; the spreadsheet remains.
+- [ ] Form disconnect pauses only that form; account disconnect revokes the refresh token at Google, deletes it from DTOC, pauses the user's syncs, and leaves spreadsheets in place.
 - [ ] No token, code, or answer data appears in logs, error messages, or `AuditLog.details`.
 - [ ] `pytest` passes, including new tests for OAuth state, token encryption, header mapping, worker retries, and idempotent connect.
 - [ ] Privacy page updated and dated; respondent notice visible on synced forms.
