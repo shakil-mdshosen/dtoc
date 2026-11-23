@@ -15,7 +15,7 @@ toolforge-jobs run janitor-purge-job \
 
 echo "Janitor job scheduled successfully. Use 'toolforge-jobs list' to verify."
 
-# Google Sheets sync worker (runs every 5 minutes). Only does work when
+# Google Sheets sync worker (runs every 2 minutes). Only does work when
 # GOOGLE_SYNC_ENABLED=1 and the Google credentials are configured; otherwise
 # it exits immediately. Delete it with: toolforge-jobs delete sheets-sync-job
 toolforge-jobs delete sheets-sync-job || true
@@ -23,6 +23,6 @@ toolforge-jobs delete sheets-sync-job || true
 toolforge-jobs run sheets-sync-job \
     --command "~/www/python/venv/bin/python ~/www/python/src/sync_worker.py" \
     --image python3.11 \
-    --schedule "*/5 * * * *"
+    --schedule "*/2 * * * *"
 
 echo "Sheets sync job scheduled successfully. Use 'toolforge-jobs list' to verify."
