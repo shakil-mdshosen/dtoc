@@ -31,6 +31,13 @@
                 It will be shared with the people who manage this form along with your response.</div>
             </div>
             {% endif %}
+            {% if sheets_active %}
+            <div class="alert alert-info" style="margin:16px 0 0">
+                <svg class="icon" aria-hidden="true"><use href="#i-table"></use></svg>
+                <div>Responses to this form are also copied to a Google Sheet owned by the form creator.
+                See the <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">privacy notice</a> for details.</div>
+            </div>
+            {% endif %}
         </div>
         <details class="disclosure" style="border-top:1px solid var(--border)">
             <summary><svg class="icon icon-sm"><use href="#i-shield"></use></svg>Privacy notice &amp; disclaimer<svg class="icon icon-sm chev"><use href="#i-down"></use></svg></summary>

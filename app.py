@@ -16,6 +16,18 @@ def create_app(config_class=Config):
     app.register_blueprint(forms_bp)
     app.register_blueprint(export_bp)
 
+    # Google Sheets sync is optional and fail-closed: the blueprint is
+    # registered only when fully configured, and google_auth itself
+    # refuses every flow when it is not. Importing it must never stop
+    # the app starting (e.g. Google libs not installed).
+    try:
+        from google_auth import google_bp, google_sync_available
+        if google_sync_available(app.config):
+            app.register_blueprint(google_bp)
+    except Exception:  # pragma: no cover - missing optional dependency
+        app.logger.warning("Google Sheets sync unavailable; continuing "
+                           "without it")
+
     @app.route('/')
     def home():
         return render_template('home.html')

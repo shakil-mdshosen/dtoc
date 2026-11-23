@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, flash, current_app
-from models import db, Form, Submission, Permission, AuditLog
+from models import (db, Form, Submission, Permission, AuditLog, SheetSync,
+                    SyncQueue, enqueue_submission)
 import json
 import base64
 import binascii
@@ -241,6 +242,33 @@ def is_owner_user(username):
     return bool(owner_username) and current_user.casefold() == owner_username.casefold()
 
 
+def sheets_status_for(form):
+    """Google Sheets sync status for a form, or None if sync is off.
+
+    Kept here (instead of importing google_auth) to avoid a circular
+    import: google_auth imports helpers from this module.
+    """
+    if not current_app.config.get("GOOGLE_SYNC_ENABLED"):
+        return None
+    sync = SheetSync.query.filter_by(form_id=form.id).first()
+    pending = 0
+    if sync:
+        pending = SyncQueue.query.filter_by(
+            form_id=form.id, status="pending").count()
+        pending += SyncQueue.query.filter_by(
+            form_id=form.id, status="sending").count()
+    return {
+        "status": sync.status if sync else "not_connected",
+        "spreadsheet_url": sync.spreadsheet_url if sync else None,
+        "last_synced_at": (
+            sync.last_synced_at.isoformat() if sync and sync.last_synced_at
+            else None),
+        "pending_count": pending,
+        "last_error": sync.last_error if sync else None,
+        "is_creator": form.created_by == (session.get("username") or ""),
+    }
+
+
 def _referrer_path():
     """Path of the page that sent this request, if it was a page on this site."""
     referrer = urlparse(request.referrer or '')
@@ -356,7 +384,9 @@ def edit_form(form_id):
         flash("Form updated successfully!", "success")
         return redirect(url_for('forms.dashboard'))
 
-    return render_template('builder.html', existing_form=form, schema_json=json.dumps(load_schema(form)))
+    return render_template('builder.html', existing_form=form, schema_json=json.dumps(load_schema(form)),
+                           sheets_status=sheets_status_for(form),
+                           google_sheets_enabled=bool(current_app.config.get("GOOGLE_SYNC_ENABLED")))
 
 
 @forms_bp.route('/form/<int:form_id>/share')
@@ -402,6 +432,17 @@ def view_form(form_id):
         )
         db.session.add(submission)
         db.session.commit()
+        # Google Sheets sync: enqueue in a SEPARATE short transaction,
+        # after the submission has committed. A queue failure must
+        # never block or roll back the 201; "Sync now" / the worker's
+        # backfill sweep can recover a missing queue row.
+        try:
+            if enqueue_submission(form.id, submission.id) is not None:
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.warning(
+                "google sheets enqueue failed: form=%s", form.id)
         return jsonify({"status": "success", "message": "Submission received"}), 201
 
     if reason == 'email_required':
@@ -412,8 +453,11 @@ def view_form(form_id):
     if reason:
         return render_template('form_closed.html', form=form, reason=reason)
     permissions = Permission.query.filter_by(form_id=form.id).all()
+    sheets = sheets_status_for(form)
     return render_template('form_view.html', form=form, schema=schema, permissions=permissions,
-                           can_edit=can_edit(form), role_labels=ROLE_LABELS)
+                           can_edit=can_edit(form), role_labels=ROLE_LABELS,
+                           sheets_active=bool(sheets and sheets["status"] == "active"),
+                           sheets_status=sheets)
 
 
 def _response_counts(form_ids):
@@ -441,7 +485,16 @@ def dashboard():
         'active': sum(1 for f in forms if f.is_active),
         'responses': sum(s['count'] for s in stats.values()),
     }
-    return render_template('dashboard.html', forms=forms, roles=roles, stats=stats, totals=totals)
+    sheets_map = {}
+    if current_app.config.get("GOOGLE_SYNC_ENABLED"):
+        for sync in SheetSync.query.filter(
+                SheetSync.form_id.in_([f.id for f in forms])).all():
+            sheets_map[sync.form_id] = {
+                "status": sync.status,
+                "spreadsheet_url": sync.spreadsheet_url,
+            }
+    return render_template('dashboard.html', forms=forms, roles=roles, stats=stats, totals=totals,
+                           sheets_map=sheets_map)
 
 
 @forms_bp.route('/owner/dashboard')
@@ -572,6 +625,8 @@ def delete_form(form_id):
         flash("You don't have permission to delete this form.", "danger")
         return redirect(url_for('forms.dashboard'))
 
+    SyncQueue.query.filter_by(form_id=form.id).delete()
+    SheetSync.query.filter_by(form_id=form.id).delete()
     Submission.query.filter_by(form_id=form.id).delete()
     Permission.query.filter_by(form_id=form.id).delete()
     db.session.add(AuditLog(action='DELETE_FORM',
@@ -622,6 +677,8 @@ def view_submissions(form_id):
         is_admin=is_admin, collaborators=collaborators,
         can_edit=can_edit(form), role=perm.role, role_labels=ROLE_LABELS,
         show_email=bool(schema['settings'].get('collect_email') or any(s.submitted_email for s in submissions)),
+        sheets_status=sheets_status_for(form),
+        google_sheets_enabled=bool(current_app.config.get("GOOGLE_SYNC_ENABLED")),
     )
 
 
@@ -635,6 +692,7 @@ def delete_submission(form_id, sub_id):
     if sub.form_id != form_id:
         return jsonify({"error": "Bad request"}), 400
 
+    SyncQueue.query.filter_by(submission_id=sub_id).delete()
     db.session.delete(sub)
     db.session.add(AuditLog(action='DELETE_SUBMISSION',
                             details=f"Submission {sub_id} from Form {form_id} deleted by {session['username']}"))

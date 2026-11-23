@@ -55,6 +55,9 @@
                     <span class="badge badge-danger">Closed</span>
                 {% endif %}
                 <span class="badge plain">{{ {'admin': 'Owner', 'editor': 'Editor'}.get(roles[form.id], 'Viewer') }}</span>
+                {% if sheets_map and sheets_map.get(form.id) %}
+                <span class="badge plain">Sheets: {{ sheets_map[form.id].status }}</span>
+                {% endif %}
             </div>
             <h3><a href="{{ url_for('forms.view_submissions', form_id=form.id) }}">{{ form.title }}</a></h3>
             <div class="form-card-meta">

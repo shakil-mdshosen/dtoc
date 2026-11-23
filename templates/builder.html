@@ -122,6 +122,22 @@
                 <textarea id="setConfirm" class="textarea" rows="3" placeholder="Your response has been recorded. Thank you!"></textarea>
             </div>
         </div>
+        {% if existing_form and google_sheets_enabled %}
+        <div class="card" style="margin-top:16px">
+            <div class="card-header"><svg class="icon"><use href="#i-table"></use></svg><h2 class="card-title">Google Sheets sync</h2></div>
+            <div class="card-body stack">
+                {% if sheets_status %}
+                <p>Status: <strong>{{ sheets_status.status }}</strong>
+                    {% if sheets_status.spreadsheet_url %} · <a href="{{ sheets_status.spreadsheet_url }}" target="_blank" rel="noopener">Open spreadsheet</a>{% endif %}
+                    {% if sheets_status.pending_count %} · {{ sheets_status.pending_count }} response(s) waiting{% endif %}</p>
+                {% else %}
+                <p>Google Sheets sync is not set up for this form.</p>
+                {% endif %}
+                <p class="hint">Sync is optional and per-form, and only the form creator can turn it on. Responses are copied to a Google Sheet within a few minutes. Manage sync from the Results page.</p>
+                <a class="btn btn-soft btn-sm" href="{{ url_for('forms.view_submissions', form_id=existing_form.id) }}">Manage Google Sheets sync</a>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </section>
 
