@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, session, flash, current_app
 from models import (db, Form, Submission, Permission, AuditLog, SheetSync,
-                    SyncQueue, enqueue_submission)
+                    SyncQueue, GoogleAccount, enqueue_submission)
 import json
 import base64
 import binascii
@@ -257,7 +257,13 @@ def sheets_status_for(form):
             form_id=form.id, status="pending").count()
         pending += SyncQueue.query.filter_by(
             form_id=form.id, status="sending").count()
+    # The template gates the Connect/Disconnect Google buttons on this;
+    # it must come from the same dict the template receives, not from
+    # google_auth._sync_status_dict (used only by the JSON status route).
+    account = GoogleAccount.query.filter_by(
+        wikimedia_username=(session.get("username") or "")).first()
     return {
+        "google_connected": bool(account),
         "status": sync.status if sync else "not_connected",
         "spreadsheet_url": sync.spreadsheet_url if sync else None,
         "last_synced_at": (
