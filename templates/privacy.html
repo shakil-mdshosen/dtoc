@@ -14,7 +14,7 @@
     <div class="card-body">
         <div class="eyebrow">Privacy notice</div>
         <h1 style="font-size:28px;margin-top:6px">How DTOC Forms handles your data</h1>
-        <p class="muted" style="margin-top:6px">Last updated: 26 September 2026</p>
+        <p class="muted" style="margin-top:6px">Last updated: 23 November 2026</p>
 
         <div class="alert alert-info" style="margin-top:18px">
             <svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg>
@@ -57,6 +57,27 @@
             <li>The form's content and settings, your username as creator, and the usernames of collaborators you add.</li>
             <li>An <strong>audit log</strong> of management actions, such as creating, editing, closing, exporting or deleting a form,
                 and adding or removing collaborators, with the username of the person who acted.</li>
+            <li>If you connect Google Sheets sync, an <strong>encrypted Google refresh token</strong> linked to your Wikimedia username
+                (see "Google Sheets sync" below). No Google password is ever stored.</li>
+        </ul>
+
+        <h3>Google Sheets sync (optional, per form)</h3>
+        <p>Sync is off unless the form creator turns it on for a specific form. When it is on:</p>
+        <ul>
+            <li>Responses to that form are <strong>copied to a Google spreadsheet in the form creator's Google account</strong>,
+                usually within a few minutes of submission. The spreadsheet contains the same columns as a CSV export:
+                response ID, time, username, collected email (if any), and the answers.</li>
+            <li>The form creator connects their Google account through Google's own sign-in screen and grants the tool
+                permission to create and edit spreadsheets. The tool stores only an encrypted refresh token for that
+                account. It does not fetch a Google profile, and no Google email address is stored.</li>
+            <li>Google's privacy policy applies to the copy in Google Sheets. <strong>Google may retain or manage that
+                copy under its own policies</strong>, even after it is deleted from DTOC.</li>
+            <li>Disconnecting sync for a form stops future copies but <strong>does not delete the spreadsheet</strong>.
+                Disconnecting the Google account revokes the tool's access at Google and deletes the stored token from DTOC;
+                spreadsheets already created stay in the creator's Google Drive.</li>
+            <li>The 90-day deletion below <strong>does not delete the Google copy</strong>. If a form reaches 90 days closed
+                while some responses have not yet been copied (for example sync is paused), deletion of those responses
+                is delayed until the copy succeeds or the queue expires, so they are not lost silently.</li>
         </ul>
 
         <h3>Stored only in your browser</h3>
@@ -82,12 +103,15 @@
                 tool's database as its operator. This access is used only to run, secure and troubleshoot the tool.</li>
             <li>Other respondents cannot see your answers. The list of users with access to a form is shown on the form itself.</li>
             <li>Your data is not sold or shared with anyone else, except where required by law or the Cloud Services Terms of Use.</li>
+            <li>If a form has Google Sheets sync turned on, its responses are also shared with <strong>Google</strong>, in a spreadsheet
+                owned by the form creator, as described above. Respondents are told on the form itself when sync is on.</li>
         </ul>
 
         <h2>How long we keep it</h2>
         <ul>
             <li>Responses are kept while a form is open. <strong>90 days after a form is closed, all its responses (including any collected
-                email addresses) are permanently deleted</strong> automatically. If a form is reopened, this countdown starts again when it is next closed.</li>
+                email addresses) are permanently deleted</strong> automatically. If a form is reopened, this countdown starts again when it is next closed.
+                Deletion may be delayed for responses that have not yet been copied to a connected Google Sheet (see above); the Google copy itself is never deleted by this tool.</li>
             <li>Form managers can delete individual responses, or a whole form with all its responses, at any time. Deletion is immediate.</li>
             <li>Form definitions and the audit log are kept after responses are deleted so that form activity remains accountable.</li>
             <li>Drafts in your browser stay until you submit, clear the form, or clear your browser's site data.</li>
@@ -97,6 +121,8 @@
         <ul>
             <li>You can choose not to respond to a form, for example if it collects your email address.</li>
             <li>To have a response corrected or deleted, contact the form creator shown on the form. If they don't respond, contact the tool maintainer.</li>
+            <li>If you connected a Google account, you can disconnect it from the Results page of any of your forms.
+                This revokes the tool's Google access and deletes its stored token; it does not delete spreadsheets already created.</li>
             <li>You can revoke the tool's access to your Wikimedia account at any time at
                 <a href="https://meta.wikimedia.org/wiki/Special:OAuthManageMyGrants" target="_blank" rel="noopener noreferrer">Special:OAuthManageMyGrants</a> on Meta-Wiki.
                 This does not delete responses you have already submitted.</li>

@@ -35,6 +35,16 @@ Form administrators can export their collected data in three highly structured f
 - **JSON:** Machine-readable data structure, perfect for bots or API integrations.
 - **Direct Excel (`.xlsx`):** A stylized, native Microsoft Excel file with perfectly formatted rows, columns, and list parsing.
 
+### 5. Optional Google Sheets sync
+
+A form creator can optionally sync a form to a Google Sheet, like Google Forms: connect their Google
+account (OAuth 2.0, scopes `spreadsheets` + `drive.file` only), create a spreadsheet from the Results
+page, and new responses are copied there within a few minutes by a background worker. Sync is per-form,
+opt-in, and never blocks submitting a form. See the full design in
+[`docs/google-sheets-sync-design.md`](docs/google-sheets-sync-design.md), including the OAuth flow,
+token encryption, privacy notes, and the Google verification step that is still required before the
+feature can be used by the general public.
+
 ---
 
 ## Technical Stack
@@ -55,6 +65,10 @@ For the application to function correctly on Toolforge, the following environmen
 | `WIKI_CLIENT_ID` | The OAuth Consumer Key from Meta-Wiki. |
 | `WIKI_CLIENT_SECRET` | The OAuth Consumer Secret from Meta-Wiki. |
 | `OWNER_USERNAME` | (Optional) The exact Wikimedia username of the superuser who has access to the `/owner/dashboard`. |
+| `GOOGLE_SYNC_ENABLED` | Set to `1` to enable the optional Google Sheets sync. `0` (default) hides it completely. |
+| `GOOGLE_CLIENT_ID` | Google Cloud OAuth client ID (Web application) for Sheets sync. Required only when `GOOGLE_SYNC_ENABLED=1`. |
+| `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth client secret for Sheets sync. Required only when `GOOGLE_SYNC_ENABLED=1`. |
+| `GOOGLE_TOKEN_KEY` | Fernet key (44-char base64) used only to encrypt stored Google refresh tokens. Required only when `GOOGLE_SYNC_ENABLED=1`. Never commit it; if it is missing or invalid, sync refuses to start (fail-closed). |
 
 ---
 

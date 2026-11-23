@@ -36,6 +36,42 @@
     <div class="card stat"><div class="stat-icon amber"><svg class="icon"><use href="#i-clock"></use></svg></div><div><div class="stat-value" style="font-size:17px">{% if submissions %}{{ submissions[0].submitted_at.strftime('%d %b, %H:%M') }}{% else %}—{% endif %}</div><div class="stat-label">Latest response (UTC)</div></div></div>
 </div>
 
+{% if google_sheets_enabled and sheets_status %}
+<div class="card" style="margin-bottom:18px">
+    <div class="card-body">
+        <h2 class="card-title" style="margin-bottom:6px">Google Sheets sync</h2>
+        <p class="muted">
+            Status: <strong>{{ sheets_status.status }}</strong>
+            {% if sheets_status.spreadsheet_url %} · <a href="{{ sheets_status.spreadsheet_url }}" target="_blank" rel="noopener">Open spreadsheet</a>{% endif %}
+            {% if sheets_status.last_synced_at %} · Last synced {{ sheets_status.last_synced_at }}{% endif %}
+            {% if sheets_status.pending_count %} · {{ sheets_status.pending_count }} response(s) waiting to sync{% endif %}
+            {% if sheets_status.last_error %} · Last error: {{ sheets_status.last_error }}{% endif %}
+        </p>
+        <p class="hint">Responses are copied to the sheet within a few minutes of submission. Sync is optional and per-form; disconnecting stops future copies but does not delete the spreadsheet.</p>
+        {% if sheets_status.is_creator %}
+        <div class="row row-wrap" style="gap:8px">
+            {% if sheets_status.status == 'not_connected' %}
+            <form action="{{ url_for('google.sheets_connect', form_id=form.id) }}" method="POST"><button class="btn btn-primary btn-sm" type="submit">Create Google Sheet and sync</button></form>
+            <a class="btn btn-ghost btn-sm" href="{{ url_for('google.google_connect', next=url_for('forms.view_submissions', form_id=form.id)) }}">Connect Google account</a>
+            {% elif sheets_status.status == 'active' %}
+            <form action="{{ url_for('google.sheets_sync_now', form_id=form.id) }}" method="POST"><button class="btn btn-soft btn-sm" type="submit">Sync now</button></form>
+            <form action="{{ url_for('google.sheets_pause', form_id=form.id) }}" method="POST"><button class="btn btn-ghost btn-sm" type="submit">Pause</button></form>
+            <form action="{{ url_for('google.sheets_disconnect', form_id=form.id) }}" method="POST"><button class="btn btn-ghost btn-sm" type="submit">Disconnect this form</button></form>
+            {% elif sheets_status.status in ['paused', 'error'] %}
+            <form action="{{ url_for('google.sheets_resume', form_id=form.id) }}" method="POST"><button class="btn btn-primary btn-sm" type="submit">Resume sync</button></form>
+            <form action="{{ url_for('google.sheets_disconnect', form_id=form.id) }}" method="POST"><button class="btn btn-ghost btn-sm" type="submit">Disconnect this form</button></form>
+            {% elif sheets_status.status == 'disconnected' %}
+            <form action="{{ url_for('google.sheets_connect', form_id=form.id) }}" method="POST"><button class="btn btn-primary btn-sm" type="submit">Create a new Google Sheet</button></form>
+            {% endif %}
+            <form action="{{ url_for('google.google_disconnect') }}" method="POST"><button class="btn btn-ghost btn-sm" type="submit">Disconnect Google account</button></form>
+        </div>
+        {% else %}
+        <p class="hint">Only the form creator ({{ form.created_by }}) can change Sheets sync for this form.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <div class="tabs" role="tablist" style="margin-bottom:18px">
     <button type="button" class="tab" role="tab" aria-selected="true" data-tab="summary"><svg class="icon icon-sm"><use href="#i-chart"></use></svg>Summary</button>
     <button type="button" class="tab" role="tab" aria-selected="false" data-tab="responses"><svg class="icon icon-sm"><use href="#i-table"></use></svg>Responses</button>
