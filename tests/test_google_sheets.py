@@ -474,3 +474,32 @@ def test_janitor_skips_purge_with_unsent_queue_rows(app):
         run_janitor(app)
         assert Submission.query.filter_by(form_id=form.id).count() == 0
         assert SyncQueue.query.filter_by(form_id=form.id).count() == 0
+
+
+# --- submissions page buttons -------------------------------------------------
+
+def test_submissions_page_shows_connect_only_when_not_connected(client, app):
+    """Regression test for PR #24: the template gates the Connect /
+    Disconnect Google buttons on sheets_status.google_connected, which
+    must come from sheets_status_for() in forms_api.py — the dict the
+    template actually receives. Before this fix that dict had no such
+    key, so Connect always showed and Disconnect never did."""
+    login(client)
+    with app.app_context():
+        form = make_form()
+        form_id = form.id
+    resp = client.get(f"/form/{form_id}/submissions")
+    assert resp.status_code == 200
+    assert b"Connect Google account" in resp.data
+    assert b"Disconnect Google account" not in resp.data
+
+    with app.app_context():
+        db.session.add(GoogleAccount(
+            wikimedia_username="CreatorUser", google_email=None,
+            encrypted_refresh_token=encrypt_refresh_token("rt-1", TOKEN_KEY),
+            scopes="https://www.googleapis.com/auth/spreadsheets"))
+        db.session.commit()
+    resp = client.get(f"/form/{form_id}/submissions")
+    assert resp.status_code == 200
+    assert b"Connect Google account" not in resp.data
+    assert b"Disconnect Google account" in resp.data
