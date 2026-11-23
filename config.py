@@ -8,6 +8,14 @@ class Config:
     WIKI_CLIENT_ID = os.environ.get("WIKI_CLIENT_ID")
     WIKI_CLIENT_SECRET = os.environ.get("WIKI_CLIENT_SECRET")
     OAUTH_MWURI = 'https://meta.wikimedia.org/w/index.php'
+
+    # Google Sheets sync (optional, off by default). No secret defaults:
+    # a missing/invalid GOOGLE_TOKEN_KEY must fail closed, never fall back
+    # to a generated or dev key (see google_tokens.py / google_auth.py).
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+    GOOGLE_TOKEN_KEY = os.environ.get("GOOGLE_TOKEN_KEY")
+    GOOGLE_SYNC_ENABLED = os.environ.get("GOOGLE_SYNC_ENABLED", "0") == "1"
     
     # Database configuration
     if "TOOL_DATA_DIR" in os.environ:
